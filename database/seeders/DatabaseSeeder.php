@@ -30,6 +30,14 @@ class DatabaseSeeder extends Seeder
             'must_change_password' => true,
         ]);
 
+        // Crear usuario RRHH de prueba con CI
+        User::create([
+            'name' => 'Recursos Humanos',
+            'email' => '1234567',
+            'password' => Hash::make('1234567'),
+            'must_change_password' => false,
+        ]);
+
         // Lista de sedes disponibles
         $sedes = [
             'Oficina Central - La Paz',
