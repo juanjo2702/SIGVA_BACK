@@ -49,13 +49,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('admin/empleados')->group(function () {
         Route::get('/', [EmpleadoController::class, 'index']);
         Route::get('/estadisticas', [EmpleadoController::class, 'estadisticas']);
+        Route::get('/plantilla', [EmpleadoController::class, 'descargarPlantilla']);
+        Route::post('/importar', [EmpleadoController::class, 'importar']);
         Route::get('/{id}', [EmpleadoController::class, 'show']);
         Route::post('/', [EmpleadoController::class, 'store']);
         Route::put('/{id}', [EmpleadoController::class, 'update']);
         Route::delete('/{id}', [EmpleadoController::class, 'destroy']);
         Route::post('/{id}/ajustar-saldo', [EmpleadoController::class, 'ajustarSaldo']);
-        Route::post('/importar', [EmpleadoController::class, 'importar']);
-        Route::get('/plantilla', [EmpleadoController::class, 'descargarPlantilla']);
     });
 
     // Solicitudes - Gestión RRHH
