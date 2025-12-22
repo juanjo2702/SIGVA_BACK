@@ -113,7 +113,7 @@ class EmpleadoController extends Controller
             'apellido_paterno' => 'required|string|max:100',
             'apellido_materno' => 'nullable|string|max:100',
             'nombres' => 'required|string|max:100',
-            'ci' => 'required|string|max:20|unique:empleados,ci',
+            'ci' => 'required|string|max:20|unique:empleados,ci|regex:/^[0-9]{4,10}(-[0-9]?[A-Za-z]{1,2})?$/',
             'genero' => 'nullable|in:Masculino,Femenino',
             'tipo_contrato' => 'nullable|in:completo,medio_tiempo',
             'sede' => 'nullable|string|max:150',
@@ -121,6 +121,9 @@ class EmpleadoController extends Controller
             'fecha_ingreso' => 'required|date',
             'saldo_vacaciones' => 'nullable|numeric',
             'activo' => 'nullable|boolean',
+        ], [
+            'ci.regex' => 'El CI debe contener 4-10 dígitos, opcionalmente con extensión (-LP, -SC, etc.)',
+            'ci.unique' => 'Ya existe un empleado con este CI.',
         ]);
 
         // Valor por defecto para tipo_contrato
@@ -160,13 +163,16 @@ class EmpleadoController extends Controller
             'apellido_paterno' => 'sometimes|required|string|max:100',
             'apellido_materno' => 'nullable|string|max:100',
             'nombres' => 'sometimes|required|string|max:100',
-            'ci' => 'sometimes|required|string|max:20|unique:empleados,ci,' . $id,
+            'ci' => 'sometimes|required|string|max:20|unique:empleados,ci,' . $id . '|regex:/^[0-9]{4,10}(-[0-9]?[A-Za-z]{1,2})?$/',
             'genero' => 'nullable|in:Masculino,Femenino',
             'tipo_contrato' => 'nullable|in:completo,medio_tiempo',
             'sede' => 'nullable|string|max:150',
             'cargo' => 'sometimes|required|string|max:100',
             'fecha_ingreso' => 'sometimes|required|date',
             'activo' => 'nullable|boolean',
+        ], [
+            'ci.regex' => 'El CI debe contener 4-10 dígitos, opcionalmente con extensión (-LP, -SC, etc.)',
+            'ci.unique' => 'Ya existe un empleado con este CI.',
         ]);
 
         $empleado->update($data);
@@ -235,17 +241,16 @@ class EmpleadoController extends Controller
     }
 
     /**
-     * Desactivar empleado (soft delete lógico)
+     * Eliminar empleado (soft delete)
      */
     public function destroy(int $id): JsonResponse
     {
         $empleado = Empleado::findOrFail($id);
-        $empleado->activo = false;
-        $empleado->save();
+        $empleado->delete();
 
         return response()->json([
             'success' => true,
-            'message' => 'Empleado desactivado correctamente.',
+            'message' => 'Empleado eliminado correctamente.',
         ]);
     }
 

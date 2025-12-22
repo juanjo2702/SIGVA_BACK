@@ -16,25 +16,30 @@ use App\Http\Controllers\Api\ReporteController;
 
 // =============================================
 // RUTAS PÚBLICAS (sin autenticación)
+// Rate limiting: 15 peticiones por minuto por IP
 // =============================================
 
-// Autenticación
-Route::post('/login', [AuthController::class, 'login']);
+// Autenticación (rate limit más estricto para login)
+Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login']);
 
-// Portal empleado - búsqueda por CI
-Route::get('/empleados/buscar/{ci}', [EmpleadoPublicoController::class, 'buscarPorCi']);
+// Portal empleado - rutas públicas con rate limiting
+Route::middleware('throttle:15,1')->group(function () {
+    // Búsqueda por CI
+    Route::get('/empleados/buscar/{ci}', [EmpleadoPublicoController::class, 'buscarPorCi']);
 
-// Crear solicitud de vacaciones
-Route::post('/solicitudes', [EmpleadoPublicoController::class, 'crearSolicitud']);
+    // Crear solicitud de vacaciones
+    Route::post('/solicitudes', [EmpleadoPublicoController::class, 'crearSolicitud']);
 
-// Crear solicitud con días individuales (nuevo formato calendario)
-Route::post('/solicitudes/con-dias', [EmpleadoPublicoController::class, 'crearSolicitudConDias']);
+    // Crear solicitud con días individuales (nuevo formato calendario)
+    Route::post('/solicitudes/con-dias', [EmpleadoPublicoController::class, 'crearSolicitudConDias']);
 
-// Obtener datos para formulario de impresión
-Route::get('/solicitudes/{id}/formulario', [EmpleadoPublicoController::class, 'datosFormulario']);
+    // Obtener datos para formulario de impresión
+    Route::get('/solicitudes/{id}/formulario', [EmpleadoPublicoController::class, 'datosFormulario']);
 
-// Calcular días hábiles (preview)
-Route::post('/calcular-dias', [EmpleadoPublicoController::class, 'calcularDias']);
+    // Calcular días hábiles (preview)
+    Route::post('/calcular-dias', [EmpleadoPublicoController::class, 'calcularDias']);
+});
+
 
 // =============================================
 // RUTAS PROTEGIDAS (requieren autenticación - RRHH)
