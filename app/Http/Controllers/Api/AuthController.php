@@ -17,17 +17,28 @@ class AuthController extends Controller
     public function login(Request $request): JsonResponse
     {
         $request->validate([
-            'email' => 'required|string',
+            'ci' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        if (!Auth::attempt($request->only('email', 'password'))) {
+        // Buscar usuario por CI
+        $user = \App\Models\User::where('ci', $request->ci)->first();
+
+        // Verificar credenciales
+        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['Las credenciales proporcionadas son incorrectas.'],
+                'ci' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
 
-        $user = Auth::user();
+        // Verificar que el usuario esté activo
+        if (!$user->activo) {
+            throw ValidationException::withMessages([
+                'ci' => ['Esta cuenta ha sido desactivada.'],
+            ]);
+        }
+
+        Auth::login($user);
         $token = $user->createToken('sigva-token')->plainTextToken;
 
         return response()->json([

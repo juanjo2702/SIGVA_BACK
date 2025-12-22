@@ -7,6 +7,8 @@ use App\Http\Controllers\Api\EmpleadoPublicoController;
 use App\Http\Controllers\Api\EmpleadoController;
 use App\Http\Controllers\Api\SolicitudController;
 use App\Http\Controllers\Api\ReporteController;
+use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\RolController;
 
 /*
 |--------------------------------------------------------------------------
@@ -82,5 +84,24 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/historial/{empleadoId}', [ReporteController::class, 'historialEmpleado']);
         Route::get('/exportar/empleados', [ReporteController::class, 'exportarEmpleados']);
         Route::get('/exportar/solicitudes', [ReporteController::class, 'exportarSolicitudes']);
+    });
+
+    // Usuarios - Gestión de usuarios del sistema
+    Route::prefix('admin/usuarios')->group(function () {
+        Route::get('/', [UserController::class, 'index']);
+        Route::post('/', [UserController::class, 'store']);
+        Route::get('/{id}', [UserController::class, 'show']);
+        Route::put('/{id}', [UserController::class, 'update']);
+        Route::delete('/{id}', [UserController::class, 'destroy']);
+        Route::post('/{id}/reset-password', [UserController::class, 'resetPassword']);
+    });
+
+    // Roles - Gestión de roles del sistema
+    Route::prefix('admin/roles')->group(function () {
+        Route::get('/', [RolController::class, 'index']);
+        Route::post('/', [RolController::class, 'store']);
+        Route::get('/{id}', [RolController::class, 'show']);
+        Route::put('/{id}', [RolController::class, 'update']);
+        Route::delete('/{id}', [RolController::class, 'destroy']);
     });
 });
