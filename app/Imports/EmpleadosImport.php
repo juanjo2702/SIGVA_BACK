@@ -19,10 +19,12 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
     protected int $actualizados = 0;
     protected array $errores = [];
     protected ?int $userId;
+    protected ?int $sedeId;
 
-    public function __construct(?int $userId = null)
+    public function __construct(?int $userId = null, ?int $sedeId = null)
     {
         $this->userId = $userId;
+        $this->sedeId = $sedeId;
     }
 
     /**
@@ -39,10 +41,9 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
         $fechaIngreso = $row['fecha_de_ingreso'] ?? $row['fecha_ingreso'] ?? null;
         $saldoDias = $row['saldo_de_dias'] ?? $row['saldo_dias'] ?? $row['saldo'] ?? 0;
 
-        // Nuevos campos: género, tipo de contrato y sede
+        // Nuevos campos: género y tipo de contrato (sede viene del frontend)
         $genero = $this->normalizarGenero($row['genero'] ?? $row['sexo'] ?? null);
         $tipoContrato = $this->normalizarTipoContrato($row['tipo_contrato'] ?? $row['contrato'] ?? $row['tipo'] ?? null);
-        $sede = $row['sede'] ?? $row['sucursal'] ?? $row['oficina'] ?? null;
 
         if (!$ci || !$apellidoPaterno || !$nombres) {
             $this->errores[] = "Fila con datos incompletos: CI={$ci}";
@@ -81,7 +82,7 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
                 'saldo_vacaciones' => floatval($saldoDias),
                 'genero' => $genero ?? $empleadoExistente->genero,
                 'tipo_contrato' => $tipoContrato ?? $empleadoExistente->tipo_contrato,
-                'sede' => $sede ? trim($sede) : $empleadoExistente->sede,
+                'sede_id' => $this->sedeId ?? $empleadoExistente->sede_id,
                 'activo' => true,
             ]);
 
@@ -112,7 +113,7 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
             'saldo_vacaciones' => floatval($saldoDias),
             'genero' => $genero,
             'tipo_contrato' => $tipoContrato ?? Empleado::CONTRATO_COMPLETO,
-            'sede' => $sede ? trim($sede) : null,
+            'sede_id' => $this->sedeId,
             'activo' => true,
         ]);
 

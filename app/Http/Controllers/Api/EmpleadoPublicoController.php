@@ -109,7 +109,7 @@ class EmpleadoPublicoController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Solicitud creada correctamente. Pendiente de aprobación por RRHH.',
+            'message' => 'Solicitud creada correctamente. Pendiente de aprobación por Talento Humano.',
             'data' => [
                 'solicitud' => $solicitud->load('empleado'),
                 'dias_solicitados' => $validacion['dias'],
@@ -182,7 +182,7 @@ class EmpleadoPublicoController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Solicitud creada correctamente. Pendiente de aprobación por RRHH.',
+            'message' => 'Solicitud creada correctamente. Pendiente de aprobación por Talento Humano.',
             'data' => [
                 'solicitud' => $solicitud->load('empleado', 'detalles'),
                 'dias_solicitados' => $validacion['total'],
@@ -218,7 +218,7 @@ class EmpleadoPublicoController extends Controller
      */
     public function datosFormulario(int $solicitudId): JsonResponse
     {
-        $solicitud = SolicitudVacacion::with('empleado')->findOrFail($solicitudId);
+        $solicitud = SolicitudVacacion::with(['empleado', 'empleado.sede'])->findOrFail($solicitudId);
         $empleado = $solicitud->empleado;
 
         // Traducir tipo
@@ -249,7 +249,7 @@ class EmpleadoPublicoController extends Controller
                     'nombre_completo' => $empleado->nombre_completo,
                     'ci' => $empleado->ci,
                     'cargo' => $empleado->cargo,
-                    'sede' => $empleado->sede,
+                    'sede' => $empleado->sede?->nombre ?? 'Sin asignar',
                     'fecha_ingreso' => $empleado->fecha_ingreso->format('d/m/Y'),
                     'anos_servicio' => $empleado->anos_servicio,
                     'dias_correspondientes' => $empleado->dias_correspondientes,

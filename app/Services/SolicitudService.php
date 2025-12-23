@@ -109,13 +109,14 @@ class SolicitudService
     }
 
     /**
-     * Programar vacaciones para un empleado (RRHH)
+     * Programar vacaciones para un empleado (Talento Humano)
      */
     public function programarVacaciones(
         Empleado $empleado,
         array $dias,
         bool $tieneReemplazo = false,
-        ?string $nombreReemplazo = null
+        ?string $nombreReemplazo = null,
+        bool $mostrarPorEtapas = false
     ): array {
         // Validar días
         $validacion = $this->vacacionesService->validarDiasArray($dias, $empleado);
@@ -144,10 +145,11 @@ class SolicitudService
             'tipo' => $tipoDetectado,
             'dias_solicitados' => $validacion['dias'],
             'estado' => SolicitudVacacion::ESTADO_PENDIENTE_DOCUMENTO,
-            'lugar_solicitud' => 'Programada por RRHH',
+            'lugar_solicitud' => 'Programada por Talento Humano',
             'tiene_reemplazo' => $tieneReemplazo,
             'nombre_reemplazo' => $tieneReemplazo ? $nombreReemplazo : null,
             'documento_entregado' => false,
+            'mostrar_por_etapas' => $mostrarPorEtapas,
         ]);
 
         // Crear detalles de cada día
@@ -182,7 +184,7 @@ class SolicitudService
                 'nombre_completo' => $empleado->nombre_completo,
                 'ci' => $empleado->ci,
                 'cargo' => $empleado->cargo,
-                'sede' => $empleado->sede,
+                'sede' => $empleado->sede?->nombre ?? 'Sin asignar',
                 'fecha_ingreso' => $empleado->fecha_ingreso->format('d/m/Y'),
                 'anos_servicio' => $empleado->anos_servicio,
                 'dias_correspondientes' => $empleado->dias_correspondientes,
@@ -203,7 +205,79 @@ class SolicitudService
                 'actual' => $empleado->saldo_vacaciones,
                 'despues' => $empleado->saldo_vacaciones - $solicitud->dias_solicitados,
             ],
+            'etapas' => $solicitud->mostrar_por_etapas ? $this->agruparDiasEnEtapas($solicitud) : [],
+            'mostrar_por_etapas' => $solicitud->mostrar_por_etapas ?? false,
         ];
+    }
+
+    /**
+     * Agrupa los días de una solicitud en etapas consecutivas
+     */
+    public function agruparDiasEnEtapas(SolicitudVacacion $solicitud): array
+    {
+        $detalles = $solicitud->detalles()->orderBy('fecha')->get();
+
+        if ($detalles->isEmpty()) {
+            // Si no hay detalles, retornar una sola etapa con las fechas de la solicitud
+            return [[
+                'numero' => 1,
+                'fecha_inicio' => $solicitud->fecha_inicio->format('d/m/Y'),
+                'fecha_fin' => $solicitud->fecha_fin->format('d/m/Y'),
+                'dias' => $solicitud->dias_solicitados,
+            ]];
+        }
+
+        $etapas = [];
+        $etapaActual = null;
+        $diasEtapa = 0;
+        $fechaAnterior = null;
+
+        foreach ($detalles as $detalle) {
+            $fechaActual = Carbon::parse($detalle->fecha);
+
+            // Determinar si hay un gap (más de un día laboral entre fechas)
+            $hayGap = false;
+            if ($fechaAnterior) {
+                $diasEntre = $fechaAnterior->copy()->addDay();
+                while ($diasEntre->lt($fechaActual)) {
+                    if ($diasEntre->dayOfWeek !== Carbon::SUNDAY) {
+                        $hayGap = true;
+                        break;
+                    }
+                    $diasEntre->addDay();
+                }
+            }
+
+            // Si hay gap o es el primer día, iniciar nueva etapa
+            if (!$etapaActual || $hayGap) {
+                // Guardar etapa anterior si existe
+                if ($etapaActual) {
+                    $etapaActual['dias'] = $diasEtapa;
+                    $etapas[] = $etapaActual;
+                }
+
+                // Iniciar nueva etapa
+                $etapaActual = [
+                    'numero' => count($etapas) + 1,
+                    'fecha_inicio' => $fechaActual->format('d/m/Y'),
+                    'fecha_fin' => $fechaActual->format('d/m/Y'),
+                ];
+                $diasEtapa = 0;
+            }
+
+            // Actualizar fecha fin y acumular días
+            $etapaActual['fecha_fin'] = $fechaActual->format('d/m/Y');
+            $diasEtapa += $detalle->dias_descontados;
+            $fechaAnterior = $fechaActual;
+        }
+
+        // Guardar última etapa
+        if ($etapaActual) {
+            $etapaActual['dias'] = $diasEtapa;
+            $etapas[] = $etapaActual;
+        }
+
+        return $etapas;
     }
 
     /**

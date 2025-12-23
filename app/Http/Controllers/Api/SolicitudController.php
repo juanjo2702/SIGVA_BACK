@@ -23,7 +23,7 @@ class SolicitudController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = SolicitudVacacion::with(['empleado', 'detalles']);
+        $query = SolicitudVacacion::with(['empleado', 'empleado.sede', 'detalles']);
 
         // Filtros
         if ($request->has('estado') && $request->estado !== 'todos') {
@@ -64,7 +64,7 @@ class SolicitudController extends Controller
      */
     public function show(int $id): JsonResponse
     {
-        $solicitud = SolicitudVacacion::with(['empleado', 'empleado.historial'])
+        $solicitud = SolicitudVacacion::with(['empleado', 'empleado.sede', 'empleado.historial'])
             ->findOrFail($id);
 
         return response()->json([
@@ -78,7 +78,7 @@ class SolicitudController extends Controller
      */
     public function aprobar(int $id): JsonResponse
     {
-        $solicitud = SolicitudVacacion::with('empleado')->findOrFail($id);
+        $solicitud = SolicitudVacacion::with(['empleado', 'empleado.sede'])->findOrFail($id);
 
         try {
             $solicitud = $this->solicitudService->aprobar($solicitud, auth()->id());
@@ -138,7 +138,7 @@ class SolicitudController extends Controller
     }
 
     /**
-     * RRHH programa vacaciones para un empleado
+     * Talento Humano programa vacaciones para un empleado
      */
     public function programarVacaciones(Request $request): JsonResponse
     {
@@ -149,6 +149,7 @@ class SolicitudController extends Controller
             'dias.*.tipo' => 'required|in:completo,parcial_manana,parcial_tarde',
             'tiene_reemplazo' => 'nullable|boolean',
             'nombre_reemplazo' => 'nullable|string|max:200',
+            'mostrar_por_etapas' => 'nullable|boolean',
         ]);
 
         $empleado = Empleado::findOrFail($request->empleado_id);
@@ -157,7 +158,8 @@ class SolicitudController extends Controller
             $empleado,
             $request->dias,
             $request->boolean('tiene_reemplazo', false),
-            $request->nombre_reemplazo
+            $request->nombre_reemplazo,
+            $request->boolean('mostrar_por_etapas', false)
         );
 
         if (!$resultado['success']) {

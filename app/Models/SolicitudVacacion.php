@@ -24,6 +24,7 @@ class SolicitudVacacion extends Model
         'tiene_reemplazo',
         'nombre_reemplazo',
         'documento_entregado',
+        'mostrar_por_etapas',
     ];
 
     protected $casts = [
@@ -33,6 +34,7 @@ class SolicitudVacacion extends Model
         'dias_solicitados' => 'decimal:1',
         'tiene_reemplazo' => 'boolean',
         'documento_entregado' => 'boolean',
+        'mostrar_por_etapas' => 'boolean',
     ];
 
     // Constantes de estado
