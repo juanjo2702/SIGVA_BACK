@@ -331,4 +331,72 @@ class VacacionesService
             $userId
         );
     }
+
+    /**
+     * Valida un array de días usando un saldo específico (para edición de aprobadas)
+     */
+    public function validarDiasArrayConSaldo(array $dias, Empleado $empleado, float $saldoParaValidar): array
+    {
+        $errors = [];
+        $esMujerMedioTiempo = $empleado->esMujerMedioTiempo();
+
+        foreach ($dias as $dia) {
+            $fecha = Carbon::parse($dia['fecha']);
+            $tipo = $dia['tipo'] ?? 'completo';
+
+            // Validar domingo
+            if ($fecha->isSunday()) {
+                $errors[] = "No se puede seleccionar domingo ({$fecha->format('d/m/Y')}).";
+            }
+
+            // Validar sábado para mujer medio tiempo
+            if ($esMujerMedioTiempo && $fecha->isSaturday()) {
+                $errors[] = "Las empleadas a medio tiempo no pueden seleccionar sábados ({$fecha->format('d/m/Y')}).";
+            }
+
+            // Validar sábado parcial para tiempo completo
+            if ($fecha->isSaturday() && $tipo !== 'completo' && !$empleado->esMedioTiempo()) {
+                $errors[] = "El sábado ({$fecha->format('d/m/Y')}) debe ser día completo, no se permite parcial.";
+            }
+        }
+
+        // Calcular días
+        $calculo = $this->calcularDiasDesdeArray($dias, $empleado);
+
+        // Usar el saldo pasado en lugar del saldo actual del empleado
+        $saldoResultante = $saldoParaValidar - $calculo['total'];
+
+        return [
+            'valid' => count($errors) === 0,
+            'errors' => $errors,
+            'dias' => $calculo['total'],
+            'detalles' => $calculo['detalles'],
+            'saldo_resultante' => $saldoResultante,
+            'advertencia_negativo' => $saldoResultante < 0,
+        ];
+    }
+
+    /**
+     * Registra en historial el ajuste por edición de solicitud aprobada
+     */
+    public function registrarAjustePorEdicion(
+        Empleado $empleado,
+        int $solicitudId,
+        float $diasOriginales,
+        float $diasNuevos,
+        float $diferencia
+    ): HistorialVacacion {
+        $saldoAnterior = $empleado->saldo_vacaciones - $diferencia;
+
+        $descripcion = "Edición de solicitud #{$solicitudId}: días cambiados de {$diasOriginales} a {$diasNuevos}";
+
+        return HistorialVacacion::registrar(
+            $empleado,
+            $saldoAnterior,
+            $diferencia,
+            HistorialVacacion::TIPO_AJUSTE_MANUAL,
+            $descripcion,
+            auth()->id()
+        );
+    }
 }

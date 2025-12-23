@@ -290,4 +290,95 @@ class SolicitudService
             default => $estado,
         };
     }
+
+    /**
+     * Actualizar una solicitud existente
+     * Si está aprobada, recalcula el saldo del empleado
+     */
+    public function actualizarSolicitud(
+        SolicitudVacacion $solicitud,
+        array $dias,
+        bool $tieneReemplazo = false,
+        ?string $nombreReemplazo = null
+    ): array {
+        $empleado = $solicitud->empleado;
+        $diasOriginales = $solicitud->dias_solicitados;
+        $estaAprobada = $solicitud->esAprobada();
+
+        // Validar días (para aprobadas, necesitamos considerar los días que se van a devolver)
+        $saldoParaValidar = $estaAprobada
+            ? $empleado->saldo_vacaciones + $diasOriginales
+            : $empleado->saldo_vacaciones;
+
+        $validacion = $this->vacacionesService->validarDiasArrayConSaldo($dias, $empleado, $saldoParaValidar);
+
+        if (!$validacion['valid']) {
+            return [
+                'success' => false,
+                'errors' => $validacion['errors'],
+            ];
+        }
+
+        // Ordenar días por fecha
+        $diasOrdenados = collect($validacion['detalles'])->sortBy('fecha')->values();
+        $primeraFecha = $diasOrdenados->first()['fecha'];
+        $ultimaFecha = $diasOrdenados->last()['fecha'];
+
+        // Detectar tipo automáticamente
+        $tipoDetectado = $this->detectarTipoVacacion($diasOrdenados);
+
+        $diasNuevos = $validacion['dias'];
+
+        // Si está aprobada, ajustar el saldo del empleado
+        if ($estaAprobada && $diasOriginales != $diasNuevos) {
+            $diferencia = $diasOriginales - $diasNuevos;
+
+            // Ajustar saldo: devolver días originales y descontar nuevos
+            // Esto es equivalente a sumar la diferencia
+            $empleado->saldo_vacaciones = $empleado->saldo_vacaciones + $diferencia;
+            $empleado->save();
+
+            // Registrar en historial
+            $this->vacacionesService->registrarAjustePorEdicion(
+                $empleado,
+                $solicitud->id,
+                $diasOriginales,
+                $diasNuevos,
+                $diferencia
+            );
+        }
+
+        // Actualizar solicitud
+        $solicitud->update([
+            'fecha_inicio' => $primeraFecha,
+            'fecha_fin' => $ultimaFecha,
+            'tipo' => $tipoDetectado,
+            'dias_solicitados' => $diasNuevos,
+            'tiene_reemplazo' => $tieneReemplazo,
+            'nombre_reemplazo' => $tieneReemplazo ? $nombreReemplazo : null,
+        ]);
+
+        // Eliminar detalles anteriores
+        $solicitud->detalles()->delete();
+
+        // Crear nuevos detalles
+        foreach ($validacion['detalles'] as $detalle) {
+            $solicitud->detalles()->create([
+                'fecha' => $detalle['fecha'],
+                'tipo' => $detalle['tipo'],
+                'dias_descontados' => $detalle['dias_descontados'],
+            ]);
+        }
+
+        return [
+            'success' => true,
+            'solicitud' => $solicitud->fresh(['empleado', 'detalles']),
+            'tipo_detectado' => $tipoDetectado,
+            'dias_actualizados' => $diasNuevos,
+            'dias_originales' => $diasOriginales,
+            'ajuste_realizado' => $estaAprobada && $diasOriginales != $diasNuevos,
+            'detalles' => $validacion['detalles'],
+            'saldo_actual' => $empleado->fresh()->saldo_vacaciones,
+        ];
+    }
 }

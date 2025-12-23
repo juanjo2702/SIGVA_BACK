@@ -20,12 +20,22 @@ class EmpleadoPublicoController extends Controller
     }
 
     /**
-     * Buscar empleado por CI (público, sin auth)
+     * Buscar empleado por CI y Fecha de Ingreso (público, sin auth)
      */
-    public function buscarPorCi(string $ci): JsonResponse
+    public function buscarEmpleado(Request $request): JsonResponse
     {
+        $request->validate([
+            'ci' => 'required|string',
+            'fecha_ingreso' => 'required|date',
+        ], [
+            'ci.required' => 'El CI es obligatorio.',
+            'fecha_ingreso.required' => 'La fecha de ingreso es obligatoria.',
+            'fecha_ingreso.date' => 'La fecha de ingreso no es válida.',
+        ]);
+
         $empleado = Empleado::activos()
-            ->where('ci', $ci)
+            ->where('ci', $request->ci)
+            ->whereDate('fecha_ingreso', $request->fecha_ingreso)
             ->with(['solicitudes' => function ($query) {
                 $query->orderBy('created_at', 'desc')->limit(10);
             }])
@@ -34,7 +44,7 @@ class EmpleadoPublicoController extends Controller
         if (!$empleado) {
             return response()->json([
                 'success' => false,
-                'message' => 'No se encontró un empleado con el CI proporcionado.',
+                'message' => 'No se encontró un empleado con el CI y fecha de ingreso proporcionados. Verifique sus datos.',
             ], 404);
         }
 

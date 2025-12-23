@@ -9,6 +9,8 @@ use App\Http\Controllers\Api\SolicitudController;
 use App\Http\Controllers\Api\ReporteController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\RolController;
+use App\Http\Controllers\Api\SedeController;
+use App\Http\Controllers\Api\FeriadoController;
 
 /*
 |--------------------------------------------------------------------------
@@ -26,8 +28,8 @@ Route::middleware('throttle:5,1')->post('/login', [AuthController::class, 'login
 
 // Portal empleado - rutas públicas con rate limiting
 Route::middleware('throttle:15,1')->group(function () {
-    // Búsqueda por CI
-    Route::get('/empleados/buscar/{ci}', [EmpleadoPublicoController::class, 'buscarPorCi']);
+    // Búsqueda por CI y Fecha de Ingreso
+    Route::post('/empleados/buscar', [EmpleadoPublicoController::class, 'buscarEmpleado']);
 
     // Crear solicitud de vacaciones
     Route::post('/solicitudes', [EmpleadoPublicoController::class, 'crearSolicitud']);
@@ -40,6 +42,12 @@ Route::middleware('throttle:15,1')->group(function () {
 
     // Calcular días hábiles (preview)
     Route::post('/calcular-dias', [EmpleadoPublicoController::class, 'calcularDias']);
+
+    // Feriados para el calendario (público)
+    Route::get('/feriados', [FeriadoController::class, 'porSede']);
+
+    // Sedes para select (público)
+    Route::get('/sedes', [SedeController::class, 'index']);
 });
 
 
@@ -71,10 +79,29 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/estadisticas', [SolicitudController::class, 'estadisticas']);
         Route::post('/programar', [SolicitudController::class, 'programarVacaciones']);
         Route::get('/{id}', [SolicitudController::class, 'show']);
+        Route::put('/{id}', [SolicitudController::class, 'update']);
         Route::put('/{id}/aprobar', [SolicitudController::class, 'aprobar']);
         Route::put('/{id}/rechazar', [SolicitudController::class, 'rechazar']);
         Route::put('/{id}/confirmar-documento', [SolicitudController::class, 'confirmarDocumento']);
         Route::get('/{id}/formulario-pdf', [SolicitudController::class, 'generarFormulario']);
+    });
+
+    // Sedes - Gestión
+    Route::prefix('admin/sedes')->group(function () {
+        Route::get('/', [SedeController::class, 'index']);
+        Route::post('/', [SedeController::class, 'store']);
+        Route::get('/{id}', [SedeController::class, 'show']);
+        Route::put('/{id}', [SedeController::class, 'update']);
+        Route::delete('/{id}', [SedeController::class, 'destroy']);
+    });
+
+    // Feriados - Gestión
+    Route::prefix('admin/feriados')->group(function () {
+        Route::get('/', [FeriadoController::class, 'index']);
+        Route::post('/', [FeriadoController::class, 'store']);
+        Route::get('/{id}', [FeriadoController::class, 'show']);
+        Route::put('/{id}', [FeriadoController::class, 'update']);
+        Route::delete('/{id}', [FeriadoController::class, 'destroy']);
     });
 
     // Reportes

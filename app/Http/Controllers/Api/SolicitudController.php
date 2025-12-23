@@ -23,7 +23,7 @@ class SolicitudController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = SolicitudVacacion::with('empleado');
+        $query = SolicitudVacacion::with(['empleado', 'detalles']);
 
         // Filtros
         if ($request->has('estado') && $request->estado !== 'todos') {
@@ -210,5 +210,59 @@ class SolicitudController extends Controller
             'success' => true,
             'data' => $datos,
         ]);
+    }
+
+    /**
+     * Actualizar una solicitud existente
+     * Permite editar pendientes, pendiente_documento Y aprobadas
+     * Para aprobadas: recalcula automáticamente el saldo del empleado
+     */
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $solicitud = SolicitudVacacion::with(['empleado', 'detalles'])->findOrFail($id);
+
+        // Solo rechazadas no se pueden editar
+        if ($solicitud->estado === SolicitudVacacion::ESTADO_RECHAZADA) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pueden editar solicitudes rechazadas.',
+            ], 422);
+        }
+
+        $request->validate([
+            'dias' => 'required|array|min:1',
+            'dias.*.fecha' => 'required|date',
+            'dias.*.tipo' => 'required|in:completo,parcial_manana,parcial_tarde',
+            'tiene_reemplazo' => 'nullable|boolean',
+            'nombre_reemplazo' => 'nullable|string|max:200',
+        ]);
+
+        try {
+            $resultado = $this->solicitudService->actualizarSolicitud(
+                $solicitud,
+                $request->dias,
+                $request->boolean('tiene_reemplazo', false),
+                $request->nombre_reemplazo
+            );
+
+            if (!$resultado['success']) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error al actualizar la solicitud.',
+                    'errors' => $resultado['errors'] ?? [],
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Solicitud actualizada correctamente.',
+                'data' => $resultado,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 }

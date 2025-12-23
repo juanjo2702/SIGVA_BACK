@@ -18,7 +18,7 @@ class Empleado extends Model
         'ci',
         'genero',
         'tipo_contrato',
-        'sede',
+        'sede_id',
         'cargo',
         'fecha_ingreso',
         'saldo_vacaciones',
@@ -54,6 +54,11 @@ class Empleado extends Model
     public function historial()
     {
         return $this->hasMany(HistorialVacacion::class);
+    }
+
+    public function sede()
+    {
+        return $this->belongsTo(Sede::class);
     }
 
     // Scopes
