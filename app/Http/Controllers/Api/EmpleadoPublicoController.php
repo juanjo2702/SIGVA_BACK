@@ -33,9 +33,20 @@ class EmpleadoPublicoController extends Controller
             'fecha_ingreso.date' => 'La fecha de ingreso no es válida.',
         ]);
 
+        // Normalizar CI: eliminar ceros a la izquierda y espacios
+        $ciNormalizado = ltrim(trim($request->ci), '0');
+
+        // Parsear la fecha con Carbon para asegurar formato correcto
+        $fechaIngreso = Carbon::parse($request->fecha_ingreso)->format('Y-m-d');
+
+        // Buscar empleado - intentar tanto con CI original como normalizado
         $empleado = Empleado::activos()
-            ->where('ci', $request->ci)
-            ->whereDate('fecha_ingreso', $request->fecha_ingreso)
+            ->where(function ($q) use ($ciNormalizado, $request) {
+                $q->where('ci', $request->ci)
+                    ->orWhere('ci', $ciNormalizado)
+                    ->orWhere('ci', ltrim($request->ci, '0'));
+            })
+            ->whereDate('fecha_ingreso', $fechaIngreso)
             ->with(['solicitudes' => function ($query) {
                 $query->orderBy('created_at', 'desc')->limit(10);
             }])
