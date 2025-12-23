@@ -202,8 +202,15 @@ class SolicitudService
                 'estado' => $this->traducirEstado($solicitud->estado),
             ],
             'saldo' => [
-                'actual' => $empleado->saldo_vacaciones,
-                'despues' => $empleado->saldo_vacaciones - $solicitud->dias_solicitados,
+                // Si está aprobada, el saldo YA fue descontado, entonces:
+                // - 'actual' = saldo ANTES de aprobar (saldo_vacaciones + dias_solicitados)
+                // - 'despues' = saldo actual (ya descontado)
+                'actual' => $solicitud->esAprobada()
+                    ? $empleado->saldo_vacaciones + $solicitud->dias_solicitados
+                    : $empleado->saldo_vacaciones,
+                'despues' => $solicitud->esAprobada()
+                    ? $empleado->saldo_vacaciones
+                    : $empleado->saldo_vacaciones - $solicitud->dias_solicitados,
             ],
             'etapas' => $solicitud->mostrar_por_etapas ? $this->agruparDiasEnEtapas($solicitud) : [],
             'mostrar_por_etapas' => $solicitud->mostrar_por_etapas ?? false,
