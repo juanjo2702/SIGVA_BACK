@@ -32,6 +32,7 @@ class HistorialVacacion extends Model
     const TIPO_SOLICITUD_APROBADA = 'solicitud_aprobada';
     const TIPO_AJUSTE_MANUAL = 'ajuste_manual';
     const TIPO_IMPORTACION = 'importacion';
+    const TIPO_DEVOLUCION_FERIADO = 'devolucion_feriado';
 
     // Relaciones
     public function empleado()

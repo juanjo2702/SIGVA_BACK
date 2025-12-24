@@ -34,6 +34,24 @@ class SolicitudController extends Controller
             $query->where('empleado_id', $request->empleado_id);
         }
 
+        // Filtro de búsqueda por nombre o CI del empleado
+        if ($request->filled('buscar')) {
+            $buscar = $request->buscar;
+            $query->whereHas('empleado', function ($q) use ($buscar) {
+                $q->where('apellido_paterno', 'like', "%{$buscar}%")
+                    ->orWhere('apellido_materno', 'like', "%{$buscar}%")
+                    ->orWhere('nombres', 'like', "%{$buscar}%")
+                    ->orWhere('ci', 'like', "%{$buscar}%");
+            });
+        }
+
+        // Filtro por sede
+        if ($request->filled('sede_id')) {
+            $query->whereHas('empleado', function ($q) use ($request) {
+                $q->where('sede_id', $request->sede_id);
+            });
+        }
+
         if ($request->has('fecha_desde')) {
             $query->whereDate('fecha_solicitud', '>=', $request->fecha_desde);
         }
@@ -266,5 +284,67 @@ class SolicitudController extends Controller
                 'message' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    /**
+     * Obtener vacaciones para el calendario compartido
+     */
+    public function vacacionesCalendario(Request $request): JsonResponse
+    {
+        $mes = $request->get('mes', date('m'));
+        $ano = $request->get('ano', date('Y'));
+        $sedeId = $request->get('sede_id');
+
+        // Calcular primer y último día del mes
+        $primerDia = "{$ano}-" . str_pad($mes, 2, '0', STR_PAD_LEFT) . "-01";
+        $ultimoDia = date('Y-m-t', strtotime($primerDia));
+
+        // Obtener solicitudes aprobadas o pendiente_documento que tienen días en este mes
+        $query = SolicitudVacacion::with(['empleado', 'empleado.sede', 'detalles'])
+            ->whereIn('estado', [SolicitudVacacion::ESTADO_APROBADA, SolicitudVacacion::ESTADO_PENDIENTE_DOCUMENTO])
+            ->whereHas('detalles', function ($q) use ($primerDia, $ultimoDia) {
+                $q->whereBetween('fecha', [$primerDia, $ultimoDia]);
+            });
+
+        // Filtrar por sede si se especifica
+        if ($sedeId) {
+            $query->whereHas('empleado', function ($q) use ($sedeId) {
+                $q->where('sede_id', $sedeId);
+            });
+        }
+
+        $solicitudes = $query->get();
+
+        // Transformar a formato para el calendario
+        $vacaciones = [];
+
+        foreach ($solicitudes as $solicitud) {
+            foreach ($solicitud->detalles as $detalle) {
+                // Solo incluir días de este mes
+                if ($detalle->fecha >= $primerDia && $detalle->fecha <= $ultimoDia) {
+                    $empleado = $solicitud->empleado;
+                    $nombres = explode(' ', $empleado->nombres);
+                    $nombreCorto = $nombres[0] . ' ' . substr($empleado->apellido_paterno, 0, 1) . '.';
+                    $iniciales = substr($nombres[0], 0, 1) . substr($empleado->apellido_paterno, 0, 1);
+
+                    $vacaciones[] = [
+                        'fecha' => $detalle->fecha,
+                        'empleado_id' => $empleado->id,
+                        'nombre_completo' => $empleado->nombre_completo,
+                        'nombre_corto' => $nombreCorto,
+                        'iniciales' => strtoupper($iniciales),
+                        'tipo' => $detalle->tipo,
+                        'sede_id' => $empleado->sede_id,
+                        'sede_nombre' => $empleado->sede?->nombre ?? 'Sin sede',
+                        'solicitud_id' => $solicitud->id,
+                    ];
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $vacaciones,
+        ]);
     }
 }

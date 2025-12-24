@@ -4,11 +4,19 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Feriado;
+use App\Services\FeriadoService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class FeriadoController extends Controller
 {
+    protected FeriadoService $feriadoService;
+
+    public function __construct(FeriadoService $feriadoService)
+    {
+        $this->feriadoService = $feriadoService;
+    }
+
     /**
      * Listar feriados con filtros
      */
@@ -93,6 +101,7 @@ class FeriadoController extends Controller
             'tipo' => 'required|in:nacional,departamental',
             'sede_id' => 'nullable|required_if:tipo,departamental|exists:sedes,id',
             'activo' => 'boolean',
+            'procesar_devoluciones' => 'boolean', // Si debe procesar devoluciones automáticamente
         ], [
             'nombre.required' => 'El nombre es obligatorio.',
             'fecha.required' => 'La fecha es obligatoria.',
@@ -117,12 +126,26 @@ class FeriadoController extends Controller
             ], 422);
         }
 
+        // Crear el feriado
+        $procesarDevoluciones = $validated['procesar_devoluciones'] ?? true;
+        unset($validated['procesar_devoluciones']);
+
         $feriado = Feriado::create($validated);
+
+        $devolucionesResult = null;
+
+        // Procesar devoluciones automáticamente
+        if ($procesarDevoluciones) {
+            $devolucionesResult = $this->feriadoService->procesarDevolucionesPorFeriado($feriado);
+        }
 
         return response()->json([
             'success' => true,
-            'message' => 'Feriado creado correctamente.',
+            'message' => $devolucionesResult && $devolucionesResult['empleados_afectados'] > 0
+                ? "Feriado creado. Se devolvieron {$devolucionesResult['dias_devueltos']} días a {$devolucionesResult['empleados_afectados']} empleados."
+                : 'Feriado creado correctamente.',
             'data' => $feriado->load('sede'),
+            'devoluciones' => $devolucionesResult,
         ], 201);
     }
 
@@ -193,5 +216,44 @@ class FeriadoController extends Controller
             'success' => true,
             'message' => 'Feriado eliminado correctamente.',
         ]);
+    }
+
+    /**
+     * Preview de empleados afectados por un feriado
+     */
+    public function previewAfectados(int $id): JsonResponse
+    {
+        $feriado = Feriado::findOrFail($id);
+        $preview = $this->feriadoService->previewAfectados($feriado);
+
+        return response()->json([
+            'success' => true,
+            'data' => $preview,
+        ]);
+    }
+
+    /**
+     * Procesar devoluciones para un feriado existente
+     */
+    public function procesarDevoluciones(int $id): JsonResponse
+    {
+        $feriado = Feriado::findOrFail($id);
+
+        try {
+            $resultado = $this->feriadoService->procesarDevolucionesPorFeriado($feriado);
+
+            return response()->json([
+                'success' => true,
+                'message' => $resultado['empleados_afectados'] > 0
+                    ? "Se devolvieron {$resultado['dias_devueltos']} días a {$resultado['empleados_afectados']} empleados."
+                    : 'No hay vacaciones para devolver en esta fecha.',
+                'data' => $resultado,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al procesar devoluciones: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

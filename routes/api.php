@@ -86,6 +86,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}/formulario-pdf', [SolicitudController::class, 'generarFormulario']);
     });
 
+    // Calendario Compartido - Vista de vacaciones del equipo
+    Route::get('/admin/vacaciones-calendario', [SolicitudController::class, 'vacacionesCalendario']);
+
     // Sedes - Gestión
     Route::prefix('admin/sedes')->group(function () {
         Route::get('/', [SedeController::class, 'index']);
@@ -102,6 +105,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [FeriadoController::class, 'show']);
         Route::put('/{id}', [FeriadoController::class, 'update']);
         Route::delete('/{id}', [FeriadoController::class, 'destroy']);
+        Route::get('/{id}/preview-afectados', [FeriadoController::class, 'previewAfectados']);
+        Route::post('/{id}/procesar-devoluciones', [FeriadoController::class, 'procesarDevoluciones']);
     });
 
     // Reportes
