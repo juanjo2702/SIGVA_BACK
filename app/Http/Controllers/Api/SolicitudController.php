@@ -299,9 +299,15 @@ class SolicitudController extends Controller
         $primerDia = "{$ano}-" . str_pad($mes, 2, '0', STR_PAD_LEFT) . "-01";
         $ultimoDia = date('Y-m-t', strtotime($primerDia));
 
-        // Obtener solicitudes aprobadas o pendiente_documento que tienen días en este mes
+        // Determinar estados a incluir según filtro
+        $estadoFiltro = $request->get('estado', 'aprobada');
+        $estados = $estadoFiltro === 'aprobada'
+            ? [SolicitudVacacion::ESTADO_APROBADA]
+            : [SolicitudVacacion::ESTADO_APROBADA, SolicitudVacacion::ESTADO_PENDIENTE_DOCUMENTO];
+
+        // Obtener solicitudes según estado filtrado
         $query = SolicitudVacacion::with(['empleado', 'empleado.sede', 'detalles'])
-            ->whereIn('estado', [SolicitudVacacion::ESTADO_APROBADA, SolicitudVacacion::ESTADO_PENDIENTE_DOCUMENTO])
+            ->whereIn('estado', $estados)
             ->whereHas('detalles', function ($q) use ($primerDia, $ultimoDia) {
                 $q->whereBetween('fecha', [$primerDia, $ultimoDia]);
             });

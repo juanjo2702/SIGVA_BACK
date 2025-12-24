@@ -47,7 +47,7 @@ class EmpleadoPublicoController extends Controller
                     ->orWhere('ci', ltrim($request->ci, '0'));
             })
             ->whereDate('fecha_ingreso', $fechaIngreso)
-            ->with(['solicitudes' => function ($query) {
+            ->with(['sede', 'solicitudes' => function ($query) {
                 $query->orderBy('created_at', 'desc')->limit(10);
             }])
             ->first();
