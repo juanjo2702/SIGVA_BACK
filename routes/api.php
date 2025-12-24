@@ -83,6 +83,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}/aprobar', [SolicitudController::class, 'aprobar']);
         Route::put('/{id}/rechazar', [SolicitudController::class, 'rechazar']);
         Route::put('/{id}/confirmar-documento', [SolicitudController::class, 'confirmarDocumento']);
+        Route::put('/{id}/cancelar', [SolicitudController::class, 'cancelar']);
         Route::get('/{id}/formulario-pdf', [SolicitudController::class, 'generarFormulario']);
     });
 

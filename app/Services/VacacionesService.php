@@ -313,6 +313,27 @@ class VacacionesService
     }
 
     /**
+     * Devuelve días de vacaciones por cancelación de solicitud aprobada
+     */
+    public function devolverVacaciones(Empleado $empleado, float $dias, int $solicitudId, ?int $userId = null, ?string $motivo = null): HistorialVacacion
+    {
+        $saldoAnterior = $empleado->saldo_vacaciones;
+        $empleado->saldo_vacaciones += $dias;
+        $empleado->save();
+
+        $descripcion = $motivo ?? "Cancelación de solicitud #{$solicitudId}";
+
+        return HistorialVacacion::registrar(
+            $empleado,
+            $saldoAnterior,
+            $dias,
+            'cancelacion',
+            $descripcion,
+            $userId
+        );
+    }
+
+    /**
      * Ajuste manual de saldo de vacaciones
      */
     public function ajustarSaldo(Empleado $empleado, float $nuevoDias, string $descripcion, int $userId): HistorialVacacion

@@ -23,15 +23,17 @@ class SolicitudService
     public function getEstadisticas(int $ano): array
     {
         $pendientes = SolicitudVacacion::pendientes()->delAno($ano)->count();
+        $pendientesDocumento = SolicitudVacacion::pendientesDocumento()->delAno($ano)->count();
         $aprobadas = SolicitudVacacion::aprobadas()->delAno($ano)->count();
         $rechazadas = SolicitudVacacion::rechazadas()->delAno($ano)->count();
         $diasAprobados = SolicitudVacacion::aprobadas()->delAno($ano)->sum('dias_solicitados');
 
         return [
             'pendientes' => $pendientes,
+            'pendientes_documento' => $pendientesDocumento,
             'aprobadas' => $aprobadas,
             'rechazadas' => $rechazadas,
-            'total' => $pendientes + $aprobadas + $rechazadas,
+            'total' => $pendientes + $pendientesDocumento + $aprobadas + $rechazadas,
             'dias_aprobados' => $diasAprobados,
             'ano' => $ano,
         ];
@@ -104,6 +106,42 @@ class SolicitudService
             $solicitud->id,
             $userId
         );
+
+        return $solicitud->fresh(['empleado']);
+    }
+
+    /**
+     * Cancelar una solicitud
+     * Si estaba aprobada, devuelve los días al saldo del empleado
+     *
+     * @throws \InvalidArgumentException
+     */
+    public function cancelar(SolicitudVacacion $solicitud, string $motivo, ?int $userId = null): SolicitudVacacion
+    {
+        if (!$solicitud->puedeCancelarse()) {
+            throw new \InvalidArgumentException('No se puede cancelar esta solicitud. Solo pueden cancelarse solicitudes pendientes, pendientes de documento o aprobadas.');
+        }
+
+        $estabaAprobada = $solicitud->esAprobada();
+        $diasDevolver = $solicitud->dias_solicitados;
+
+        // Cambiar estado a cancelada
+        $solicitud->estado = SolicitudVacacion::ESTADO_CANCELADA;
+        $solicitud->motivo_cancelacion = $motivo;
+        $solicitud->cancelada_por = $userId;
+        $solicitud->fecha_cancelacion = Carbon::now();
+        $solicitud->save();
+
+        // Si estaba aprobada, devolver los días al saldo del empleado
+        if ($estabaAprobada) {
+            $this->vacacionesService->devolverVacaciones(
+                $solicitud->empleado,
+                $diasDevolver,
+                $solicitud->id,
+                $userId,
+                'Cancelación de solicitud: ' . $motivo
+            );
+        }
 
         return $solicitud->fresh(['empleado']);
     }

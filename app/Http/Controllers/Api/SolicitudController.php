@@ -219,6 +219,42 @@ class SolicitudController extends Controller
     }
 
     /**
+     * Cancelar una solicitud
+     */
+    public function cancelar(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'motivo' => 'required|string|max:500',
+        ]);
+
+        $solicitud = SolicitudVacacion::with('empleado')->findOrFail($id);
+
+        try {
+            $estabaAprobada = $solicitud->esAprobada();
+            $diasDevueltos = $estabaAprobada ? $solicitud->dias_solicitados : 0;
+
+            $solicitud = $this->solicitudService->cancelar($solicitud, $request->motivo, auth()->id());
+
+            $mensaje = 'Solicitud cancelada correctamente.';
+            if ($estabaAprobada) {
+                $mensaje .= " Se devolvieron {$diasDevueltos} días al saldo del empleado.";
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $mensaje,
+                'data' => $solicitud,
+                'dias_devueltos' => $diasDevueltos,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
      * Generar formulario PDF para impresión
      */
     public function generarFormulario(int $id): JsonResponse

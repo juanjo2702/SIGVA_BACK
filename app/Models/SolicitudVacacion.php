@@ -20,6 +20,9 @@ class SolicitudVacacion extends Model
         'dias_solicitados',
         'estado',
         'motivo_rechazo',
+        'motivo_cancelacion',
+        'cancelada_por',
+        'fecha_cancelacion',
         'lugar_solicitud',
         'tiene_reemplazo',
         'nombre_reemplazo',
@@ -42,6 +45,7 @@ class SolicitudVacacion extends Model
     const ESTADO_PENDIENTE_DOCUMENTO = 'pendiente_documento';
     const ESTADO_APROBADA = 'aprobada';
     const ESTADO_RECHAZADA = 'rechazada';
+    const ESTADO_CANCELADA = 'cancelada';
 
     // Constantes de tipo
     const TIPO_COMPLETO = 'completo';
@@ -60,6 +64,14 @@ class SolicitudVacacion extends Model
     public function detalles()
     {
         return $this->hasMany(DetalleSolicitudVacacion::class, 'solicitud_vacacion_id')->orderBy('fecha');
+    }
+
+    /**
+     * Relación con usuario que canceló
+     */
+    public function usuarioCancelo()
+    {
+        return $this->belongsTo(User::class, 'cancelada_por');
     }
 
     // Scopes
@@ -81,6 +93,11 @@ class SolicitudVacacion extends Model
     public function scopeRechazadas($query)
     {
         return $query->where('estado', self::ESTADO_RECHAZADA);
+    }
+
+    public function scopeCanceladas($query)
+    {
+        return $query->where('estado', self::ESTADO_CANCELADA);
     }
 
     public function scopeDelAno($query, $ano = null)
@@ -108,6 +125,19 @@ class SolicitudVacacion extends Model
     public function esRechazada(): bool
     {
         return $this->estado === self::ESTADO_RECHAZADA;
+    }
+
+    public function esCancelada(): bool
+    {
+        return $this->estado === self::ESTADO_CANCELADA;
+    }
+
+    /**
+     * Verifica si la solicitud puede ser cancelada
+     */
+    public function puedeCancelarse(): bool
+    {
+        return !$this->esRechazada() && !$this->esCancelada();
     }
 
     public function esParcial(): bool
