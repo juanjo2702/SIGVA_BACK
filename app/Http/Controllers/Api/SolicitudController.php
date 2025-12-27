@@ -259,7 +259,7 @@ class SolicitudController extends Controller
      */
     public function generarFormulario(int $id): JsonResponse
     {
-        $solicitud = SolicitudVacacion::with('empleado')->findOrFail($id);
+        $solicitud = SolicitudVacacion::with(['empleado', 'empleado.sede', 'detalles'])->findOrFail($id);
         $datos = $this->solicitudService->generarDatosFormulario($solicitud);
 
         return response()->json([

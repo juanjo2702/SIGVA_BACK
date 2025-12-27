@@ -196,6 +196,7 @@ class SolicitudService
                 'fecha' => $detalle['fecha'],
                 'tipo' => $detalle['tipo'],
                 'dias_descontados' => $detalle['dias_descontados'],
+                'etapa' => $detalle['etapa'] ?? 1,
             ]);
         }
 
@@ -250,13 +251,20 @@ class SolicitudService
                     ? $empleado->saldo_vacaciones
                     : $empleado->saldo_vacaciones - $solicitud->dias_solicitados,
             ],
-            'etapas' => $solicitud->mostrar_por_etapas ? $this->agruparDiasEnEtapas($solicitud) : [],
-            'mostrar_por_etapas' => $solicitud->mostrar_por_etapas ?? false,
+            // Calcular etapas automáticamente si es discontinuo o tiene mostrar_por_etapas
+            'etapas' => $this->debeCalcularEtapas($solicitud) ? $this->agruparDiasEnEtapas($solicitud) : [],
+            'mostrar_por_etapas' => $this->debeCalcularEtapas($solicitud),
+            'detalles' => $solicitud->detalles->map(fn($d) => [
+                'fecha' => $d->fecha->format('Y-m-d'),
+                'tipo' => $d->tipo,
+                'dias_descontados' => $d->dias_descontados,
+            ])->toArray(),
         ];
     }
 
     /**
-     * Agrupa los días de una solicitud en etapas consecutivas
+     * Agrupa los días de una solicitud en etapas basándose en el campo etapa guardado
+     * Si no hay campo etapa, agrupa por días consecutivos (fallback)
      */
     public function agruparDiasEnEtapas(SolicitudVacacion $solicitud): array
     {
@@ -272,6 +280,37 @@ class SolicitudService
             ]];
         }
 
+        // Verificar si hay campo etapa guardado (diferente de 1 o múltiples valores)
+        $etapasGuardadas = $detalles->pluck('etapa')->unique()->sort()->values();
+        $tieneEtapasGuardadas = $etapasGuardadas->count() > 1 || $etapasGuardadas->first() != 1 ||
+            $detalles->where('etapa', '>', 1)->count() > 0;
+
+        if ($tieneEtapasGuardadas || $detalles->pluck('etapa')->unique()->count() > 1) {
+            // Agrupar por el campo etapa guardado
+            $etapasAgrupadas = $detalles->groupBy('etapa');
+            $etapas = [];
+
+            foreach ($etapasAgrupadas as $numEtapa => $diasEtapa) {
+                $diasOrdenados = $diasEtapa->sortBy('fecha');
+                $primeraFecha = Carbon::parse($diasOrdenados->first()->fecha);
+                $ultimaFecha = Carbon::parse($diasOrdenados->last()->fecha);
+                $totalDias = $diasOrdenados->sum('dias_descontados');
+
+                $etapas[] = [
+                    'numero' => $numEtapa,
+                    'fecha_inicio' => $primeraFecha->format('d/m/Y'),
+                    'fecha_fin' => $ultimaFecha->format('d/m/Y'),
+                    'dias' => $totalDias,
+                ];
+            }
+
+            // Ordenar por número de etapa
+            usort($etapas, fn($a, $b) => $a['numero'] - $b['numero']);
+
+            return $etapas;
+        }
+
+        // Fallback: agrupar por días consecutivos si no hay etapas guardadas
         $etapas = [];
         $etapaActual = null;
         $diasEtapa = 0;
@@ -323,6 +362,26 @@ class SolicitudService
         }
 
         return $etapas;
+    }
+
+    /**
+     * Determina si se deben calcular y mostrar etapas en el formulario
+     * Se muestra si: es discontinuo (tiene múltiples etapas) o si mostrar_por_etapas está activo
+     */
+    public function debeCalcularEtapas(SolicitudVacacion $solicitud): bool
+    {
+        // Si tiene el flag activo, mostrar
+        if ($solicitud->mostrar_por_etapas) {
+            return true;
+        }
+
+        // Si es tipo discontinuo, calcular y verificar si hay múltiples etapas
+        if (in_array($solicitud->tipo, ['completa_discontinua', 'parcial_discontinua'])) {
+            $etapas = $this->agruparDiasEnEtapas($solicitud);
+            return count($etapas) > 1;
+        }
+
+        return false;
     }
 
     /**
@@ -486,6 +545,7 @@ class SolicitudService
                 'fecha' => $detalle['fecha'],
                 'tipo' => $detalle['tipo'],
                 'dias_descontados' => $detalle['dias_descontados'],
+                'etapa' => $detalle['etapa'] ?? 1,
             ]);
         }
 

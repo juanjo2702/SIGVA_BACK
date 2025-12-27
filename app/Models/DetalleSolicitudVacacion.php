@@ -18,6 +18,7 @@ class DetalleSolicitudVacacion extends Model
         'fecha',
         'tipo',
         'dias_descontados',
+        'etapa',
     ];
 
     protected $casts = [

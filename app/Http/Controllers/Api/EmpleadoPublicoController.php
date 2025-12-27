@@ -229,57 +229,15 @@ class EmpleadoPublicoController extends Controller
      */
     public function datosFormulario(int $solicitudId): JsonResponse
     {
-        $solicitud = SolicitudVacacion::with(['empleado', 'empleado.sede'])->findOrFail($solicitudId);
-        $empleado = $solicitud->empleado;
+        $solicitud = SolicitudVacacion::with(['empleado', 'empleado.sede', 'detalles'])->findOrFail($solicitudId);
 
-        // Traducir tipo
-        $tipoTraducido = match ($solicitud->tipo) {
-            'completo' => 'Día Completo',
-            'parcial_manana' => 'Medio Día (Mañana)',
-            'parcial_tarde' => 'Medio Día (Tarde)',
-            'completa_continua' => 'Completa Continua',
-            'completa_discontinua' => 'Completa Discontinua',
-            'parcial_continua' => 'Parcial Continua',
-            'parcial_discontinua' => 'Parcial Discontinua',
-            default => $solicitud->tipo ?? '-',
-        };
-
-        // Traducir estado
-        $estadoTraducido = match ($solicitud->estado) {
-            'pendiente' => 'Pendiente',
-            'pendiente_documento' => 'Pendiente Documento',
-            'aprobada' => 'Aprobada',
-            'rechazada' => 'Rechazada',
-            default => $solicitud->estado,
-        };
+        // Usar el servicio para generar datos del formulario (incluye etapas)
+        $solicitudService = app(\App\Services\SolicitudService::class);
+        $datos = $solicitudService->generarDatosFormulario($solicitud);
 
         return response()->json([
             'success' => true,
-            'data' => [
-                'empleado' => [
-                    'nombre_completo' => $empleado->nombre_completo,
-                    'ci' => $empleado->ci,
-                    'cargo' => $empleado->cargo,
-                    'sede' => $empleado->sede?->nombre ?? 'Sin asignar',
-                    'fecha_ingreso' => $empleado->fecha_ingreso->format('d/m/Y'),
-                    'anos_servicio' => $empleado->anos_servicio,
-                    'dias_correspondientes' => $empleado->dias_correspondientes,
-                ],
-                'solicitud' => [
-                    'id' => $solicitud->id,
-                    'fecha_solicitud' => $solicitud->fecha_solicitud->format('d/m/Y'),
-                    'fecha_inicio' => $solicitud->fecha_inicio->format('d/m/Y'),
-                    'fecha_fin' => $solicitud->fecha_fin->format('d/m/Y'),
-                    'tipo' => $tipoTraducido,
-                    'dias_solicitados' => $solicitud->dias_solicitados,
-                    'reemplazo' => $solicitud->texto_reemplazo,
-                    'estado' => $estadoTraducido,
-                ],
-                'saldo' => [
-                    'actual' => $empleado->saldo_vacaciones,
-                    'despues' => $empleado->saldo_vacaciones - $solicitud->dias_solicitados,
-                ],
-            ],
+            'data' => $datos,
         ]);
     }
 

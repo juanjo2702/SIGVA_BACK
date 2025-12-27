@@ -106,7 +106,7 @@ class VacacionesService
     /**
      * Calcula los días a descontar desde un array de días individuales con sus tipos
      *
-     * @param array $dias Array con ['fecha' => 'Y-m-d', 'tipo' => 'completo|parcial_manana|parcial_tarde']
+     * @param array $dias Array con ['fecha' => 'Y-m-d', 'tipo' => 'completo|parcial_manana|parcial_tarde', 'etapa' => int (opcional)]
      * @param Empleado $empleado El empleado
      * @return array ['total' => float, 'detalles' => array]
      */
@@ -118,6 +118,7 @@ class VacacionesService
         foreach ($dias as $dia) {
             $fecha = Carbon::parse($dia['fecha']);
             $tipo = $dia['tipo'] ?? 'completo';
+            $etapa = $dia['etapa'] ?? 1;
 
             $diasDescontados = $this->calcularDiaIndividual($fecha, $tipo, $empleado);
 
@@ -128,6 +129,7 @@ class VacacionesService
                     'dias_descontados' => $diasDescontados,
                     'es_sabado' => $fecha->isSaturday(),
                     'dia_semana' => $fecha->locale('es')->dayName,
+                    'etapa' => $etapa,
                 ];
                 $total += $diasDescontados;
             }
