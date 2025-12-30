@@ -72,8 +72,9 @@ class SolicitudService
      */
     public function rechazar(SolicitudVacacion $solicitud, string $motivo): SolicitudVacacion
     {
-        if (!$solicitud->esPendiente()) {
-            throw new \InvalidArgumentException('Solo se pueden rechazar solicitudes pendientes.');
+        // Permitir rechazar solicitudes pendientes y pendientes de documento
+        if (!$solicitud->esPendiente() && !$solicitud->esPendienteDocumento()) {
+            throw new \InvalidArgumentException('Solo se pueden rechazar solicitudes pendientes o pendientes de documento.');
         }
 
         $solicitud->estado = SolicitudVacacion::ESTADO_RECHAZADA;
@@ -251,13 +252,14 @@ class SolicitudService
                     ? $empleado->saldo_vacaciones
                     : $empleado->saldo_vacaciones - $solicitud->dias_solicitados,
             ],
-            // Calcular etapas automáticamente si es discontinuo o tiene mostrar_por_etapas
-            'etapas' => $this->debeCalcularEtapas($solicitud) ? $this->agruparDiasEnEtapas($solicitud) : [],
-            'mostrar_por_etapas' => $this->debeCalcularEtapas($solicitud),
+            // SIEMPRE calcular etapas para mostrar el calendario
+            'etapas' => $this->agruparDiasEnEtapas($solicitud),
+            'mostrar_calendario' => true,
             'detalles' => $solicitud->detalles->map(fn($d) => [
                 'fecha' => $d->fecha->format('Y-m-d'),
                 'tipo' => $d->tipo,
                 'dias_descontados' => $d->dias_descontados,
+                'etapa' => $d->etapa ?? 1,
             ])->toArray(),
         ];
     }
@@ -280,13 +282,12 @@ class SolicitudService
             ]];
         }
 
-        // Verificar si hay campo etapa guardado (diferente de 1 o múltiples valores)
-        $etapasGuardadas = $detalles->pluck('etapa')->unique()->sort()->values();
-        $tieneEtapasGuardadas = $etapasGuardadas->count() > 1 || $etapasGuardadas->first() != 1 ||
-            $detalles->where('etapa', '>', 1)->count() > 0;
+        // Obtener las etapas únicas guardadas en los detalles
+        $etapasGuardadas = $detalles->pluck('etapa')->filter()->unique()->sort()->values();
 
-        if ($tieneEtapasGuardadas || $detalles->pluck('etapa')->unique()->count() > 1) {
-            // Agrupar por el campo etapa guardado
+        // Si hay etapas guardadas (campo etapa tiene valores), agrupar por etapas
+        // Esto respeta la agrupación del usuario aunque los días no sean consecutivos
+        if ($etapasGuardadas->isNotEmpty()) {
             $etapasAgrupadas = $detalles->groupBy('etapa');
             $etapas = [];
 
@@ -297,7 +298,7 @@ class SolicitudService
                 $totalDias = $diasOrdenados->sum('dias_descontados');
 
                 $etapas[] = [
-                    'numero' => $numEtapa,
+                    'numero' => $numEtapa ?: 1,
                     'fecha_inicio' => $primeraFecha->format('d/m/Y'),
                     'fecha_fin' => $ultimaFecha->format('d/m/Y'),
                     'dias' => $totalDias,
@@ -310,7 +311,8 @@ class SolicitudService
             return $etapas;
         }
 
-        // Fallback: agrupar por días consecutivos si no hay etapas guardadas
+        // Fallback: agrupar por días consecutivos SOLO si no hay etapas guardadas
+        // Esto es para solicitudes antiguas que no tienen el campo etapa
         $etapas = [];
         $etapaActual = null;
         $diasEtapa = 0;

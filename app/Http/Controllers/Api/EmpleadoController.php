@@ -288,4 +288,43 @@ class EmpleadoController extends Controller
     {
         return Excel::download(new PlantillaEmpleadosExport(), 'plantilla_empleados.xlsx');
     }
+
+    /**
+     * Obtener días ocupados por solicitudes activas del empleado
+     * (pendiente, pendiente_documento, aprobada)
+     */
+    public function diasOcupados(int $id): JsonResponse
+    {
+        $empleado = Empleado::findOrFail($id);
+
+        // Obtener solicitudes activas (no rechazadas ni canceladas)
+        $solicitudesActivas = $empleado->solicitudes()
+            ->whereIn('estado', ['pendiente', 'pendiente_documento', 'aprobada'])
+            ->with('detalles')
+            ->get();
+
+        $diasOcupados = [];
+
+        foreach ($solicitudesActivas as $solicitud) {
+            foreach ($solicitud->detalles as $detalle) {
+                $fecha = $detalle->fecha instanceof \DateTime
+                    ? $detalle->fecha->format('Y-m-d')
+                    : (is_string($detalle->fecha) ? explode('T', $detalle->fecha)[0] : null);
+
+                if ($fecha) {
+                    $diasOcupados[] = [
+                        'fecha' => $fecha,
+                        'estado' => $solicitud->estado,
+                        'tipo' => $detalle->tipo,
+                        'solicitud_id' => $solicitud->id,
+                    ];
+                }
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $diasOcupados,
+        ]);
+    }
 }

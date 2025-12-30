@@ -71,6 +71,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [EmpleadoController::class, 'update']);
         Route::delete('/{id}', [EmpleadoController::class, 'destroy']);
         Route::post('/{id}/ajustar-saldo', [EmpleadoController::class, 'ajustarSaldo']);
+        Route::get('/{id}/dias-ocupados', [EmpleadoController::class, 'diasOcupados']);
     });
 
     // Solicitudes - Gestión RRHH
