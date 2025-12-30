@@ -58,6 +58,11 @@ class EmpleadoController extends Controller
             $query->where('saldo_vacaciones', '<=', $request->saldo_max);
         }
 
+        // Filtro por sede
+        if ($request->filled('sede_id')) {
+            $query->where('sede_id', $request->sede_id);
+        }
+
         // Filtro por género
         if ($request->has('genero') && $request->genero !== 'todos') {
             $query->where('genero', $request->genero);
@@ -82,6 +87,12 @@ class EmpleadoController extends Controller
 
         // Paginación
         $perPage = $request->get('per_page', 15);
+
+        \Illuminate\Support\Facades\Log::info('SQL Query:', [
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings()
+        ]);
+
         $empleados = $query->paginate($perPage);
 
         return response()->json([
