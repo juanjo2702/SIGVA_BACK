@@ -509,34 +509,30 @@ class SolicitudService
 
         $diasNuevos = $validacion['dias'];
 
-        // Si está aprobada, ajustar el saldo del empleado
-        if ($estaAprobada && $diasOriginales != $diasNuevos) {
-            $diferencia = $diasOriginales - $diasNuevos;
-
-            // Ajustar saldo: devolver días originales y descontar nuevos
-            // Esto es equivalente a sumar la diferencia
-            $empleado->saldo_vacaciones = $empleado->saldo_vacaciones + $diferencia;
+        // Si está aprobada, revertir saldo y cambiar estado para exigir nuevo documento
+        if ($estaAprobada) {
+            // Devolver saldo original completo (ya que pasará a pendiente)
+            $empleado->saldo_vacaciones = $empleado->saldo_vacaciones + $diasOriginales;
             $empleado->save();
-
-            // Registrar en historial
-            $this->vacacionesService->registrarAjustePorEdicion(
-                $empleado,
-                $solicitud->id,
-                $diasOriginales,
-                $diasNuevos,
-                $diferencia
-            );
         }
 
-        // Actualizar solicitud
-        $solicitud->update([
+        $datosUpdate = [
             'fecha_inicio' => $primeraFecha,
             'fecha_fin' => $ultimaFecha,
             'tipo' => $tipoDetectado,
             'dias_solicitados' => $diasNuevos,
             'tiene_reemplazo' => $tieneReemplazo,
             'nombre_reemplazo' => $tieneReemplazo ? $nombreReemplazo : null,
-        ]);
+        ];
+
+        // Si estaba aprobada, forzar cambio de estado y resetear documento
+        if ($estaAprobada) {
+            $datosUpdate['estado'] = 'pendiente_documento';
+            $datosUpdate['documento_entregado'] = false;
+        }
+
+        // Actualizar solicitud
+        $solicitud->update($datosUpdate);
 
         // Eliminar detalles anteriores
         $solicitud->detalles()->delete();
