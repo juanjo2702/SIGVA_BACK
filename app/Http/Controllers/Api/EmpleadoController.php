@@ -57,11 +57,6 @@ class EmpleadoController extends Controller
             $query->where('saldo_vacaciones', '<=', $request->saldo_max);
         }
 
-        // Filtro por sede
-        if ($request->has('sede_id')) {
-            $query->where('sede_id', $request->sede_id);
-        }
-
         // Filtro por género
         if ($request->has('genero') && $request->genero !== 'todos') {
             $query->where('genero', $request->genero);
