@@ -7,6 +7,7 @@ use App\Models\Feriado;
 use App\Services\FeriadoService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Carbon\Carbon;
 
 class FeriadoController extends Controller
 {
@@ -22,43 +23,78 @@ class FeriadoController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Feriado::with('sede');
+        try {
+            $query = Feriado::with('sede');
 
-        // Filtro por tipo
-        if ($request->filled('tipo')) {
-            $query->where('tipo', $request->tipo);
-        }
+            // Filtro por tipo
+            if ($request->filled('tipo')) {
+                $query->where('tipo', $request->tipo);
+            }
 
-        // Filtro por sede
-        if ($request->filled('sede_id')) {
-            $query->where('sede_id', $request->sede_id);
-        }
+            // Filtro por sede
+            if ($request->filled('sede_id')) {
+                $query->where('sede_id', $request->sede_id);
+            }
 
-        // Filtro por año
-        if ($request->filled('ano')) {
-            $query->whereYear('fecha', $request->ano);
-        }
+            // Filtro por año (incluyendo recurrentes)
+            if ($request->filled('ano')) {
+                $ano = $request->ano;
+                $query->where(function ($q) use ($ano) {
+                    $q->whereYear('fecha', $ano)
+                        ->orWhere('es_recurrente', true);
+                });
+            }
 
-        // Búsqueda
-        if ($request->filled('buscar')) {
-            $query->where('nombre', 'like', "%{$request->buscar}%");
-        }
+            // Búsqueda
+            if ($request->filled('buscar')) {
+                $query->where('nombre', 'like', "%{$request->buscar}%");
+            }
 
-        // Sin paginación para calendario
-        if ($request->boolean('all')) {
+            // Sin paginación para calendario
+            if ($request->boolean('all')) {
+                $datos = $query->orderBy('fecha')->get();
+                // Ajustar fechas recurrentes si se filtró por año
+                if ($request->filled('ano')) {
+                    $ano = (int)$request->ano;
+                    $datos->transform(function ($f) use ($ano) {
+                        if ($f->es_recurrente && $f->fecha instanceof \Carbon\Carbon) {
+                            $f->fecha = $f->fecha->copy()->setYear($ano);
+                        }
+                        return $f;
+                    });
+                    $datos = $datos->sortBy('fecha')->values();
+                }
+                return response()->json([
+                    'success' => true,
+                    'data' => $datos,
+                ]);
+            }
+
+            $perPage = $request->get('per_page', 15);
+            $feriados = $query->orderBy('fecha', 'desc')->paginate($perPage);
+
+            // Ajustar fechas recurrentes en la paginación
+            if ($request->filled('ano')) {
+                $ano = (int)$request->ano;
+                $feriados->getCollection()->transform(function ($f) use ($ano) {
+                    if ($f->es_recurrente && $f->fecha instanceof \Carbon\Carbon) {
+                        $f->fecha = $f->fecha->copy()->setYear($ano);
+                    }
+                    return $f;
+                });
+            }
+
             return response()->json([
                 'success' => true,
-                'data' => $query->orderBy('fecha')->get(),
+                'data' => $feriados,
             ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al cargar feriados: ' . $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ], 500);
         }
-
-        $perPage = $request->get('per_page', 15);
-        $feriados = $query->orderBy('fecha', 'desc')->paginate($perPage);
-
-        return response()->json([
-            'success' => true,
-            'data' => $feriados,
-        ]);
     }
 
     /**
@@ -70,7 +106,8 @@ class FeriadoController extends Controller
         $sedeId = $request->get('sede_id');
         $ano = $request->get('ano', date('Y'));
 
-        $query = Feriado::activos()->whereYear('fecha', $ano);
+        // Usar scopeDelAno que ya incluye recurrentes
+        $query = Feriado::activos()->delAno($ano);
 
         if ($sedeId) {
             $query->where(function ($q) use ($sedeId) {
@@ -82,7 +119,19 @@ class FeriadoController extends Controller
             $query->where('tipo', Feriado::TIPO_NACIONAL);
         }
 
-        $feriados = $query->orderBy('fecha')->get(['id', 'nombre', 'fecha', 'tipo']);
+        $feriados = $query->orderBy('fecha')->get(['id', 'nombre', 'fecha', 'tipo', 'es_recurrente']);
+
+        // Ajustar fechas recurrentes
+        $feriados->transform(function ($f) use ($ano) {
+            $ano = (int)$ano;
+            if ($f->es_recurrente && $f->fecha instanceof \Carbon\Carbon) {
+                $f->fecha = $f->fecha->copy()->setYear($ano);
+            }
+            return $f;
+        });
+
+        // Reordenar cronológicamente
+        $feriados = $feriados->sortBy('fecha')->values();
 
         return response()->json([
             'success' => true,
@@ -101,6 +150,7 @@ class FeriadoController extends Controller
             'tipo' => 'required|in:nacional,departamental',
             'sede_id' => 'nullable|required_if:tipo,departamental|exists:sedes,id',
             'activo' => 'boolean',
+            'es_recurrente' => 'boolean',
             'procesar_devoluciones' => 'boolean', // Si debe procesar devoluciones automáticamente
         ], [
             'nombre.required' => 'El nombre es obligatorio.',
@@ -175,6 +225,7 @@ class FeriadoController extends Controller
             'tipo' => 'required|in:nacional,departamental',
             'sede_id' => 'nullable|required_if:tipo,departamental|exists:sedes,id',
             'activo' => 'boolean',
+            'es_recurrente' => 'boolean',
         ]);
 
         // Si es nacional, sede_id debe ser null

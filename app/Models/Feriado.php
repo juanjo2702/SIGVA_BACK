@@ -15,11 +15,13 @@ class Feriado extends Model
         'tipo',
         'sede_id',
         'activo',
+        'es_recurrente',
     ];
 
     protected $casts = [
         'fecha' => 'date',
         'activo' => 'boolean',
+        'es_recurrente' => 'boolean',
     ];
 
     // Constantes de tipo
@@ -64,7 +66,11 @@ class Feriado extends Model
     public function scopeDelAno($query, $ano = null)
     {
         $ano = $ano ?? date('Y');
-        return $query->whereYear('fecha', $ano);
+        // Buscar feriados exactos de ese año O recurrentes
+        return $query->where(function ($q) use ($ano) {
+            $q->whereYear('fecha', $ano)
+                ->orWhere('es_recurrente', true);
+        });
     }
 
     /**
@@ -83,7 +89,23 @@ class Feriado extends Model
      */
     public static function esFeriado($fecha, $sedeId = null): bool
     {
-        $query = self::activos()->where('fecha', $fecha);
+        // Parsear fecha para obtener día y mes
+        $fechaCarbon = \Carbon\Carbon::parse($fecha);
+        $dia = $fechaCarbon->day;
+        $mes = $fechaCarbon->month;
+        $fechaStr = $fechaCarbon->format('Y-m-d');
+
+        $query = self::activos();
+
+        // Filtro por fecha exacta OR recurrente (mismo día/mes)
+        $query->where(function ($q) use ($fechaStr, $dia, $mes) {
+            $q->where('fecha', $fechaStr)
+                ->orWhere(function ($sub) use ($dia, $mes) {
+                    $sub->where('es_recurrente', true)
+                        ->whereDay('fecha', $dia)
+                        ->whereMonth('fecha', $mes);
+                });
+        });
 
         if ($sedeId) {
             $query->where(function ($q) use ($sedeId) {
