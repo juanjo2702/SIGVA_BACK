@@ -27,6 +27,7 @@ class EmpleadoController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        \Illuminate\Support\Facades\Log::info('EmpleadoController::index params', $request->all());
         $query = Empleado::with('sede');
 
         // Filtros
