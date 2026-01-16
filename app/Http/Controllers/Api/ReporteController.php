@@ -8,6 +8,7 @@ use App\Models\SolicitudVacacion;
 use App\Models\HistorialVacacion;
 use App\Exports\EmpleadosExport;
 use App\Exports\SolicitudesExport;
+use App\Exports\ReporteGeneralExport;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Maatwebsite\Excel\Facades\Excel;
@@ -153,5 +154,15 @@ class ReporteController extends Controller
         $filename = 'solicitudes_sigva_' . date('Y-m-d_His') . '.xlsx';
 
         return Excel::download(new SolicitudesExport($request->all()), $filename);
+    }
+
+    /**
+     * Exportar reporte general (Plan de Vacaciones) a Excel
+     */
+    public function exportarReporteGeneral(Request $request)
+    {
+        $filename = 'plan_vacaciones_' . date('Y-m-d_His') . '.xlsx';
+
+        return Excel::download(new ReporteGeneralExport($request->all()), $filename);
     }
 }

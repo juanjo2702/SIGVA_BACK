@@ -118,6 +118,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/historial/{empleadoId}', [ReporteController::class, 'historialEmpleado']);
         Route::get('/exportar/empleados', [ReporteController::class, 'exportarEmpleados']);
         Route::get('/exportar/solicitudes', [ReporteController::class, 'exportarSolicitudes']);
+        Route::get('/exportar/general', [ReporteController::class, 'exportarReporteGeneral']);
     });
 
     // Usuarios - Gestión de usuarios del sistema
