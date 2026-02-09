@@ -163,7 +163,7 @@ class SolicitudController extends Controller
         $request->validate([
             'empleado_id' => 'required|exists:empleados,id',
             'dias' => 'required|array|min:1',
-            'dias.*.fecha' => 'required|date|after_or_equal:today',
+            'dias.*.fecha' => 'required|date',
             'dias.*.tipo' => 'required|in:completo,parcial_manana,parcial_tarde',
             'tiene_reemplazo' => 'nullable|boolean',
             'nombre_reemplazo' => 'nullable|string|max:200',
