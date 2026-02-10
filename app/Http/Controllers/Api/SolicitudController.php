@@ -168,6 +168,7 @@ class SolicitudController extends Controller
             'tiene_reemplazo' => 'nullable|boolean',
             'nombre_reemplazo' => 'nullable|string|max:200',
             'mostrar_por_etapas' => 'nullable|boolean',
+            'observacion' => 'nullable|string',
         ]);
 
         $empleado = Empleado::findOrFail($request->empleado_id);
@@ -177,7 +178,8 @@ class SolicitudController extends Controller
             $request->dias,
             $request->boolean('tiene_reemplazo', false),
             $request->nombre_reemplazo,
-            $request->boolean('mostrar_por_etapas', false)
+            $request->boolean('mostrar_por_etapas', false),
+            $request->observacion
         );
 
         if (!$resultado['success']) {

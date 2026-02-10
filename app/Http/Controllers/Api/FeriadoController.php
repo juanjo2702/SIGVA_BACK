@@ -33,7 +33,15 @@ class FeriadoController extends Controller
 
             // Filtro por sede
             if ($request->filled('sede_id')) {
-                $query->where('sede_id', $request->sede_id);
+                if ($request->boolean('incluir_nacionales')) {
+                    $sedeId = $request->sede_id;
+                    $query->where(function ($q) use ($sedeId) {
+                        $q->where('tipo', Feriado::TIPO_NACIONAL)
+                          ->orWhere('sede_id', $sedeId);
+                    });
+                } else {
+                    $query->where('sede_id', $request->sede_id);
+                }
             }
 
             // Filtro por año (incluyendo recurrentes)

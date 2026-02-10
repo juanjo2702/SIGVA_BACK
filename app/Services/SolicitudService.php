@@ -155,7 +155,8 @@ class SolicitudService
         array $dias,
         bool $tieneReemplazo = false,
         ?string $nombreReemplazo = null,
-        bool $mostrarPorEtapas = false
+        bool $mostrarPorEtapas = false,
+        ?string $observacion = null
     ): array {
         // Validar días
         $validacion = $this->vacacionesService->validarDiasArray($dias, $empleado);
@@ -189,6 +190,7 @@ class SolicitudService
             'nombre_reemplazo' => $tieneReemplazo ? $nombreReemplazo : null,
             'documento_entregado' => false,
             'mostrar_por_etapas' => $mostrarPorEtapas,
+            'observacion' => $observacion,
         ]);
 
         // Crear detalles de cada día

@@ -28,6 +28,7 @@ class SolicitudVacacion extends Model
         'nombre_reemplazo',
         'documento_entregado',
         'mostrar_por_etapas',
+        'observacion',
     ];
 
     protected $casts = [
