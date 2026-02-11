@@ -59,8 +59,8 @@ class EmpleadoPublicoController extends Controller
             ], 404);
         }
 
-        // Fecha mínima para solicitar (5 días desde hoy)
-        $fechaMinima = Carbon::now()->addDays(5)->format('Y-m-d');
+        // Fecha mínima para solicitar (1 día desde hoy - desde mañana)
+        $fechaMinima = Carbon::now()->addDays(1)->format('Y-m-d');
 
         return response()->json([
             'success' => true,
@@ -77,8 +77,8 @@ class EmpleadoPublicoController extends Controller
      */
     public function crearSolicitud(Request $request): JsonResponse
     {
-        // Fecha mínima: 5 días desde hoy
-        $fechaMinima = Carbon::now()->addDays(5)->format('Y-m-d');
+        // Fecha mínima: 1 día desde hoy
+        $fechaMinima = Carbon::now()->addDays(1)->format('Y-m-d');
 
         $request->validate([
             'empleado_id' => 'required|exists:empleados,id',
@@ -87,7 +87,7 @@ class EmpleadoPublicoController extends Controller
             'tipo' => 'required|in:completo,parcial_manana,parcial_tarde',
             'lugar_solicitud' => 'nullable|string|max:255',
         ], [
-            'fecha_inicio.after_or_equal' => 'La fecha de inicio debe ser al menos 5 días después de hoy.',
+            'fecha_inicio.after_or_equal' => 'La fecha de inicio debe ser al menos 1 día después de hoy (desde mañana).',
         ]);
 
         $empleado = Empleado::findOrFail($request->empleado_id);
@@ -136,8 +136,8 @@ class EmpleadoPublicoController extends Controller
      */
     public function crearSolicitudConDias(Request $request): JsonResponse
     {
-        // Fecha mínima: 5 días desde hoy
-        $fechaMinima = Carbon::now()->addDays(5)->format('Y-m-d');
+        // Fecha mínima: 1 día desde hoy
+        $fechaMinima = Carbon::now()->addDays(1)->format('Y-m-d');
 
         $request->validate([
             'empleado_id' => 'required|exists:empleados,id',
@@ -147,7 +147,7 @@ class EmpleadoPublicoController extends Controller
             'lugar_solicitud' => 'nullable|string|max:255',
             'reemplazo' => 'nullable|string|max:255',
         ], [
-            'dias.*.fecha.after_or_equal' => 'Las vacaciones deben solicitarse con al menos 5 días de anticipación.',
+            'dias.*.fecha.after_or_equal' => 'Las vacaciones deben solicitarse con al menos 1 día de anticipación (desde mañana).',
         ]);
 
         $empleado = \App\Models\Empleado::findOrFail($request->empleado_id);
