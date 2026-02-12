@@ -32,8 +32,8 @@ class FeriadoService
             // Query para obtener detalles de vacaciones en esa fecha
             $query = DetalleSolicitudVacacion::where('fecha', $fecha)
                 ->whereHas('solicitud', function ($q) {
-                    // Solo solicitudes aprobadas o pendiente_documento
-                    $q->whereIn('estado', ['aprobada', 'pendiente_documento']);
+                    // Solo solicitudes aprobadas (ya descontadas)
+                    $q->where('estado', 'aprobada');
                 })
                 ->with(['solicitud.empleado']);
 
@@ -106,7 +106,7 @@ class FeriadoService
 
         $query = DetalleSolicitudVacacion::where('fecha', $fecha)
             ->whereHas('solicitud', function ($q) {
-                $q->whereIn('estado', ['aprobada', 'pendiente_documento']);
+                $q->where('estado', 'aprobada');
             })
             ->with(['solicitud.empleado']);
 

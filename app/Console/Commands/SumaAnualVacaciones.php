@@ -41,19 +41,39 @@ class SumaAnualVacaciones extends Command
         foreach ($empleados as $empleado) {
             $procesados++;
 
-            // Verificar si es aniversario o si se forzó
-            if ($this->option('force') || $empleado->esAniversarioHoy()) {
+            $esAniversario = $empleado->esAniversarioHoy();
+            $necesitaCaptura = false;
+
+            // Lógica de "Catch-up": Si no es aniversario hoy, verificar si le falta la suma de su año actual
+            if (!$esAniversario && !$this->option('force')) {
+                $anos = $empleado->anos_servicio;
+                if ($anos >= 1) {
+                    $yaSumado = $empleado->historial()
+                        ->where('tipo_cambio', 'suma_anual')
+                        ->where('descripcion', 'like', "%Años de servicio: $anos%")
+                        ->exists();
+                    if (!$yaSumado) {
+                        $necesitaCaptura = true;
+                        $this->line("! Detectado aniversario pendiente para {$empleado->nombre_completo} (Año: $anos)");
+                    }
+                }
+            }
+
+            // Ejecutar si es aniversario, si se forzó, o si detectamos que falta captura
+            if ($this->option('force') || $esAniversario || $necesitaCaptura) {
                 $historial = $this->vacacionesService->procesarSumaAnual($empleado);
 
                 if ($historial) {
                     $sumados++;
-                    $this->line("✓ {$empleado->nombre_completo} (CI: {$empleado->ci}) - Sumados {$historial->dias_cambio} días");
+                    $this->line("✓ {$empleado->nombre_completo} (CI: {$empleado->ci}) - Sumados {$historial->dias_cambio} días (Total: {$historial->dias_nuevos})");
 
                     Log::info('Suma anual de vacaciones', [
                         'empleado_id' => $empleado->id,
                         'ci' => $empleado->ci,
+                        'anos_servicio' => $empleado->anos_servicio,
                         'dias_sumados' => $historial->dias_cambio,
                         'nuevo_saldo' => $historial->dias_nuevos,
+                        'motivo' => $esAniversario ? 'aniversario_hoy' : ($necesitaCaptura ? 'catch_up' : 'forced')
                     ]);
                 }
             }

@@ -267,15 +267,8 @@ class VacacionesService
         ];
     }
 
-    /**
-     * Procesa la suma anual de vacaciones para un empleado
-     */
     public function procesarSumaAnual(Empleado $empleado): ?HistorialVacacion
     {
-        if (!$empleado->esAniversarioHoy()) {
-            return null;
-        }
-
         $diasCorrespondientes = $empleado->dias_correspondientes;
 
         if ($diasCorrespondientes <= 0) {
