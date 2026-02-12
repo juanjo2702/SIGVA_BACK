@@ -6,6 +6,7 @@ use App\Models\Empleado;
 use App\Services\VacacionesService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class SumaAnualVacaciones extends Command
 {
@@ -43,18 +44,24 @@ class SumaAnualVacaciones extends Command
 
             $esAniversario = $empleado->esAniversarioHoy();
             $necesitaCaptura = false;
+            $hoy = Carbon::now();
 
-            // Lógica de "Catch-up": Si no es aniversario hoy, verificar si le falta la suma de su año actual
+            // Lógica de "Catch-up": Solo si no es aniversario hoy y ya pasó su fecha de aniversario este año
             if (!$esAniversario && !$this->option('force')) {
-                $anos = $empleado->anos_servicio;
-                if ($anos >= 1) {
-                    $yaSumado = $empleado->historial()
-                        ->where('tipo_cambio', 'suma_anual')
-                        ->where('descripcion', 'like', "%Años de servicio: $anos%")
-                        ->exists();
-                    if (!$yaSumado) {
-                        $necesitaCaptura = true;
-                        $this->line("! Detectado aniversario pendiente para {$empleado->nombre_completo} (Año: $anos)");
+                $yaPasoAniversarioEsteAno = $hoy->month > $empleado->fecha_ingreso->month
+                    || ($hoy->month == $empleado->fecha_ingreso->month && $hoy->day > $empleado->fecha_ingreso->day);
+
+                if ($yaPasoAniversarioEsteAno) {
+                    $anos = $empleado->anos_servicio;
+                    if ($anos >= 1) {
+                        $yaSumado = $empleado->historial()
+                            ->where('tipo_cambio', 'suma_anual')
+                            ->where('descripcion', 'like', "%Años de servicio: $anos%")
+                            ->exists();
+                        if (!$yaSumado) {
+                            $necesitaCaptura = true;
+                            $this->line("! Detectado aniversario pendiente para {$empleado->nombre_completo} (Año: $anos)");
+                        }
                     }
                 }
             }
