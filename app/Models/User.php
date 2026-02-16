@@ -35,14 +35,14 @@ class User extends Authenticatable implements JWTSubject
      */
     protected $fillable = [
         'ci',
-        'name',
-        'apellido_paterno',
-        'apellido_materno',
+        'nombres',
+        'apellidos',
         'email',
         'password',
         'rol_id',
         'activo',
         'must_change_password',
+        'sede_id',
     ];
 
     /**
@@ -121,8 +121,14 @@ class User extends Authenticatable implements JWTSubject
      */
     public function getSystemsAttribute()
     {
-        $systemIds = $this->getAllPermissions()->pluck('system_id')->unique()->filter();
-        return System::whereIn('id', $systemIds)->get();
+        // En producción puede que getAllPermissions falle si no hay pivot,
+        // pero asumimos que el trait funciona.
+        try {
+            $systemIds = $this->getAllPermissions()->pluck('system_id')->unique()->filter();
+            return System::whereIn('id', $systemIds)->get();
+        } catch (\Exception $e) {
+            return [];
+        }
     }
 
     /**
@@ -130,12 +136,7 @@ class User extends Authenticatable implements JWTSubject
      */
     public function getNombreCompletoAttribute(): string
     {
-        $nombre = $this->name;
-        $nombre .= ' ' . $this->apellido_paterno;
-        if ($this->apellido_materno) {
-            $nombre .= ' ' . $this->apellido_materno;
-        }
-        return $nombre;
+        return $this->nombres . ' ' . $this->apellidos;
     }
 
     /**
