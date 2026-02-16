@@ -13,8 +13,8 @@ class Rol extends Model
     protected $table = 'roles';
 
     protected $fillable = [
-        'name',
-        'description',
+        'nombre',
+        'descripcion',
         'guard_name',
         'system_id',
         'activo',
@@ -24,16 +24,12 @@ class Rol extends Model
         'activo' => 'boolean',
     ];
 
-    protected $appends = ['nombre', 'descripcion'];
+    // Para compatibilidad
+    protected $appends = ['name'];
 
-    public function getNombreAttribute()
+    public function getNameAttribute()
     {
-        return $this->name;
-    }
-
-    public function getDescripcionAttribute()
-    {
-        return $this->description;
+        return $this->nombre;
     }
 
     /**
