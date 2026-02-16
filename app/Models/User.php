@@ -7,11 +7,26 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+use Tymon\JWTAuth\Contracts\JWTSubject;
 
-class User extends Authenticatable
+use App\Traits\HasSharedPermissions;
+
+class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, HasApiTokens;
+    use HasApiTokens, HasFactory, Notifiable, HasSharedPermissions;
+
+    /**
+     * Use the 'core' connection for shared users table.
+     */
+    protected $connection = 'core';
+
+    /**
+     * The table associated with the model.
+     *
+     * @var string
+     */
+    protected $table = 'users';
 
     /**
      * The attributes that are mass assignable.
@@ -45,7 +60,15 @@ class User extends Authenticatable
      *
      * @var array
      */
-    protected $appends = ['nombre_completo'];
+    protected $appends = ['nombre_completo', 'permisos', 'systems'];
+
+    /**
+     * Get merged permissions (from role + individual)
+     */
+    public function getPermisosAttribute(): array
+    {
+        return $this->getAllPermissions()->pluck('name')->toArray();
+    }
 
     /**
      * Eager load relations by default
@@ -76,6 +99,33 @@ class User extends Authenticatable
     }
 
     /**
+     * Relación con Sede
+     */
+    public function sede()
+    {
+        return $this->belongsTo(Sede::class, 'sede_id');
+    }
+
+    /**
+     * Systems link (pivot)
+     */
+    public function userSystems()
+    {
+        return $this->belongsToMany(System::class, 'user_systems', 'user_id', 'system_id')
+                    ->withPivot('role_id', 'activo')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Dynamic systems attribute (filtered by permissions)
+     */
+    public function getSystemsAttribute()
+    {
+        $systemIds = $this->getAllPermissions()->pluck('system_id')->unique()->filter();
+        return System::whereIn('id', $systemIds)->get();
+    }
+
+    /**
      * Accessor para nombre completo
      */
     public function getNombreCompletoAttribute(): string
@@ -99,8 +149,33 @@ class User extends Authenticatable
     /**
      * Verificar si es admin
      */
+
     public function esAdmin(): bool
     {
         return $this->tieneRol('admin') || $this->tieneRol('administrador');
+    }
+
+    /**
+     * Get the identifier that will be stored in the subject claim of the JWT.
+     *
+     * @return mixed
+     */
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    /**
+     * Return a key value array, containing any custom claims to be added to the JWT.
+     *
+     * @return array
+     */
+    public function getJWTCustomClaims()
+    {
+        return [
+            'rol_id' => $this->rol_id,
+            'ci' => $this->ci,
+            // Add other helpful claims here to avoid DB lookups?
+        ];
     }
 }

@@ -54,7 +54,7 @@ Route::middleware('throttle:15,1')->group(function () {
 // =============================================
 // RUTAS PROTEGIDAS (requieren autenticación - RRHH)
 // =============================================
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware('auth:api')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
@@ -129,6 +129,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [UserController::class, 'update']);
         Route::delete('/{id}', [UserController::class, 'destroy']);
         Route::post('/{id}/reset-password', [UserController::class, 'resetPassword']);
+        Route::get('/{id}/permissions', [UserController::class, 'getPermissions']);
+        Route::post('/{id}/permissions', [UserController::class, 'syncPermissions']);
     });
 
     // Roles - Gestión de roles del sistema

@@ -64,6 +64,10 @@ class SedeController extends Controller
             'departamento.required' => 'El departamento es obligatorio.',
         ]);
 
+        if (isset($validated['abreviacion'])) {
+            $validated['sigla'] = $validated['abreviacion'];
+        }
+
         $sede = Sede::create($validated);
 
         return response()->json([
@@ -99,6 +103,10 @@ class SedeController extends Controller
             'departamento' => 'required|string|max:100',
             'activo' => 'boolean',
         ]);
+
+        if (isset($validated['abreviacion'])) {
+            $validated['sigla'] = $validated['abreviacion'];
+        }
 
         $sede->update($validated);
 

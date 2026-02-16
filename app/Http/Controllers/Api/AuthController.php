@@ -24,12 +24,12 @@ class AuthController extends Controller
         // Buscar usuario por CI
         $user = \App\Models\User::where('ci', $request->ci)->first();
 
-        // Verificar credenciales
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            throw ValidationException::withMessages([
-                'ci' => ['Las credenciales proporcionadas son incorrectas.'],
-            ]);
-        }
+        // Verificar credenciales con attempt (JWT lo hace automáticamente, pero podemos pre-verificar si queremos)
+        // Sin embargo, para JWT standard, usamos auth()->attempt.
+        // Como estamos modificando el flow, eliminamos la verificacion manual si usamos attempt abajo.
+        // Pero el codigo original hacia verificaciones manuales.
+        // Vamos a simplificar usando attempt.
+
 
         // Verificar que el usuario esté activo
         if (!$user->activo) {
@@ -38,8 +38,26 @@ class AuthController extends Controller
             ]);
         }
 
-        Auth::login($user);
-        $token = $user->createToken('sigva-token')->plainTextToken;
+        // JWT Auth
+        $credentials = $request->only('ci', 'password');
+
+        if (! $token = auth('api')->attempt($credentials)) {
+            throw ValidationException::withMessages([
+                'ci' => ['Las credenciales proporcionadas son incorrectas.'],
+            ]);
+        }
+
+        // Get the authenticated user
+        $user = auth('api')->user();
+        $user->load(['userSystems', 'rol.permissions', 'individualPermissions', 'sede']);
+
+        // Verificar que el usuario esté activo
+        if (!$user->activo) {
+             auth('api')->logout();
+            throw ValidationException::withMessages([
+                'ci' => ['Esta cuenta ha sido desactivada.'],
+            ]);
+        }
 
         return response()->json([
             'success' => true,
@@ -47,6 +65,8 @@ class AuthController extends Controller
             'data' => [
                 'user' => $user,
                 'token' => $token,
+                'token_type' => 'bearer',
+                'expires_in' => auth('api')->factory()->getTTL() * 60,
                 'must_change_password' => $user->must_change_password,
             ],
         ]);
@@ -87,7 +107,7 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        auth('api')->logout();
 
         return response()->json([
             'success' => true,
@@ -100,9 +120,11 @@ class AuthController extends Controller
      */
     public function me(Request $request): JsonResponse
     {
+        $user = $request->user();
+        $user->load(['userSystems', 'rol.permissions', 'individualPermissions', 'sede']);
         return response()->json([
             'success' => true,
-            'data' => $request->user(),
+            'data' => $user,
         ]);
     }
 }

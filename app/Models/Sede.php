@@ -9,9 +9,13 @@ class Sede extends Model
 {
     use HasFactory;
 
+    protected $connection = 'core';
+    protected $table = 'sedes';
+
     protected $fillable = [
         'nombre',
         'abreviacion',
+        'sigla',
         'departamento',
         'activo',
     ];
@@ -19,6 +23,13 @@ class Sede extends Model
     protected $casts = [
         'activo' => 'boolean',
     ];
+
+    protected $appends = ['sigla'];
+
+    public function getSiglaAttribute()
+    {
+        return $this->attributes['sigla'] ?? $this->abreviacion;
+    }
 
     /**
      * Relación con empleados

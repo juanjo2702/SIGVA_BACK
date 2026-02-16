@@ -9,11 +9,14 @@ class Rol extends Model
 {
     use HasFactory;
 
+    protected $connection = 'core';
     protected $table = 'roles';
 
     protected $fillable = [
-        'nombre',
-        'descripcion',
+        'name',
+        'description',
+        'guard_name',
+        'system_id',
         'activo',
     ];
 
@@ -21,11 +24,28 @@ class Rol extends Model
         'activo' => 'boolean',
     ];
 
+    protected $appends = ['nombre', 'descripcion'];
+
+    public function getNombreAttribute()
+    {
+        return $this->name;
+    }
+
+    public function getDescripcionAttribute()
+    {
+        return $this->description;
+    }
+
     /**
      * Usuarios con este rol
      */
     public function usuarios()
     {
         return $this->hasMany(User::class, 'rol_id');
+    }
+
+    public function permissions()
+    {
+        return $this->belongsToMany(Permission::class, 'role_has_permissions', 'role_id', 'permission_id');
     }
 }

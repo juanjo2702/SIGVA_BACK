@@ -45,7 +45,19 @@ class UserController extends Controller
 
         // Paginación
         $porPagina = $request->get('por_pagina', 15);
-        $usuarios = $query->paginate($porPagina);
+        $usuarios = $query->with(['rol', 'sede'])->paginate($porPagina);
+
+        // Agregar estado de contraseña (igual que en SISPO)
+        $usuarios->getCollection()->transform(function ($u) {
+            if (Hash::check($u->ci, $u->password)) {
+                $u->password_actual = $u->ci;
+                $u->password_segura = false;
+            } else {
+                $u->password_actual = '🔒 Personalizada';
+                $u->password_segura = true;
+            }
+            return $u;
+        });
 
         return response()->json($usuarios);
     }
@@ -56,11 +68,14 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'ci' => ['required', 'string', 'max:20', 'unique:users,ci', 'regex:/^[0-9]+(-[0-9A-Za-z]+)?$/'],
+            'ci' => ['required', 'string', 'max:20', 'unique:core.users,ci', 'regex:/^[0-9]+(-[0-9A-Za-z]+)?$/'],
             'name' => 'required|string|max:255',
             'apellido_paterno' => 'required|string|max:255',
             'apellido_materno' => 'nullable|string|max:255',
-            'rol_id' => 'required|exists:roles,id',
+            'email' => 'nullable|email|unique:core.users,email',
+            'rol_id' => 'required|exists:core.roles,id',
+            'sede_id' => 'nullable|exists:core.sedes,id',
+            'activo' => 'boolean',
         ], [
             'ci.required' => 'El CI es obligatorio',
             'ci.unique' => 'Este CI ya está registrado',
@@ -74,7 +89,9 @@ class UserController extends Controller
         // Password inicial es el CI
         $validated['password'] = Hash::make($validated['ci']);
         $validated['must_change_password'] = true;
-        $validated['activo'] = true;
+        if (!isset($validated['activo'])) {
+            $validated['activo'] = true;
+        }
 
         $user = User::create($validated);
 
@@ -89,7 +106,7 @@ class UserController extends Controller
      */
     public function show($id)
     {
-        $user = User::findOrFail($id);
+        $user = User::with(['rol', 'sede'])->findOrFail($id);
         return response()->json($user);
     }
 
@@ -101,11 +118,13 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         $validated = $request->validate([
-            'ci' => ['required', 'string', 'max:20', Rule::unique('users')->ignore($user->id), 'regex:/^[0-9]+(-[0-9A-Za-z]+)?$/'],
+            'ci' => ['required', 'string', 'max:20', Rule::unique('core.users')->ignore($user->id), 'regex:/^[0-9]+(-[0-9A-Za-z]+)?$/'],
             'name' => 'required|string|max:255',
             'apellido_paterno' => 'required|string|max:255',
             'apellido_materno' => 'nullable|string|max:255',
-            'rol_id' => 'required|exists:roles,id',
+            'email' => 'nullable|email|unique:core.users,email,' . $user->id,
+            'rol_id' => 'required|exists:core.roles,id',
+            'sede_id' => 'nullable|exists:core.sedes,id',
             'activo' => 'boolean',
         ], [
             'ci.required' => 'El CI es obligatorio',
@@ -121,7 +140,7 @@ class UserController extends Controller
 
         return response()->json([
             'message' => 'Usuario actualizado exitosamente',
-            'data' => $user
+            'data' => $user->load(['rol', 'sede'])
         ]);
     }
 
@@ -159,7 +178,45 @@ class UserController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Contraseña restablecida exitosamente. La nueva contraseña es el CI del usuario.'
+            'message' => 'Contraseña restablecida exitosamente.',
+            'nueva_password' => $user->ci
+        ]);
+    }
+
+    /**
+     * Obtener todos los permisos y los individuales del usuario
+     */
+    public function getPermissions($id)
+    {
+        $usuario = User::findOrFail($id);
+        $allPermissions = \App\Models\Permission::with('systems')->get();
+        $userIndividualPermissionsIds = $usuario->individualPermissions()->pluck('permission_id')->toArray();
+        $rolePermissionsIds = $usuario->rol ? $usuario->rol->permissions()->pluck('permission_id')->toArray() : [];
+
+        return response()->json([
+            'all_permissions' => $allPermissions,
+            'individual_permission_ids' => $userIndividualPermissionsIds,
+            'role_permission_ids' => $rolePermissionsIds,
+        ]);
+    }
+
+    /**
+     * Sincronizar permisos individuales
+     */
+    public function syncPermissions(Request $request, $id)
+    {
+        $usuario = User::findOrFail($id);
+
+        $request->validate([
+            'permissions' => 'array',
+            'permissions.*' => 'exists:core.permissions,id',
+        ]);
+
+        $usuario->individualPermissions()->syncWithPivotValues($request->permissions, ['model_type' => User::class]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Permisos individuales actualizados correctamente.',
         ]);
     }
 }
