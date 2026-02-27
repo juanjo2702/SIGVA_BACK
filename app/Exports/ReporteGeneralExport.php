@@ -113,8 +113,11 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
         $saldoActual = (float) $empleado->saldo_vacaciones;
         $diasTomados = $solicitud ? (float) $solicitud->dias_solicitados : 0;
 
+        // Si la solicitud ya está aprobada, el saldo_vacaciones actual ya tiene el descuento.
+        // Queremos mostrar cuánto tenía ANTES de ese descuento específico.
+        // Nota: Si hay múltiples aprobadas, este cálculo es solo aproximado por fila.
         $saldoAntes = ($solicitud && $solicitud->estado === 'aprobada') ? ($saldoActual + $diasTomados) : $saldoActual;
-        $saldoDespues = $saldoAntes - $diasTomados;
+        $saldoDespues = ($solicitud && $solicitud->estado === 'aprobada') ? $saldoActual : ($saldoActual - $diasTomados);
 
         return [
             $empleado->apellido_paterno,
@@ -130,6 +133,7 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
             $solicitud ? $solicitud->fecha_fin->format('d/m/Y') : '',
             (float) $diasTomados,
             (float) $saldoDespues,
+            $solicitud ? strtoupper($solicitud->estado) : 'SIN PROGRAMAR',
             ($solicitud && $solicitud->nombre_reemplazo) ? $solicitud->nombre_reemplazo : '',
             $cargoReemplazo
         ];
@@ -157,8 +161,9 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
             'FECHA PROGRAMADA FIN VACACION',
             'DIAS TOMADOS',
             'SALDO',
+            'ESTADO',
             'REEMPLAZO',
-            'CARGO'
+            'CARGO REEMPLAZO'
         ];
     }
 
@@ -193,12 +198,12 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
                 $sheet->insertNewRowBefore(1, 2);
 
                 // FILA 1: Nombre de la Sede
-                $sheet->mergeCells('A1:O1');
+                $sheet->mergeCells('A1:P1');
                 $nombreSede = strtoupper($this->sede ? $this->sede->nombre : 'TODAS LAS SEDES');
                 $sheet->setCellValue('A1', $nombreSede);
 
                 // FILA 2: Resumen de Filtros
-                $sheet->mergeCells('A2:O2');
+                $sheet->mergeCells('A2:P2');
                 $year = $this->filtros['ano'] ?? date('Y');
                 $fechaDesde = $this->filtros['fecha_desde'] ?? null;
                 $fechaHasta = $this->filtros['fecha_hasta'] ?? null;
@@ -212,24 +217,24 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
                 $sheet->setCellValue('A2', $resumenFiltros);
 
                 // Estilo Sede (Fila 1)
-                $sheet->getStyle('A1:O1')->applyFromArray([
-                    'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => '000000']],
+                $sheet->getStyle('A1:P1')->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'A9D08E']]
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '2E7D32']]
                 ]);
                 $sheet->getRowDimension(1)->setRowHeight(35);
 
                 // Estilo Resumen Filtros (Fila 2)
-                $sheet->getStyle('A2:O2')->applyFromArray([
-                    'font' => ['bold' => true, 'size' => 10, 'color' => ['rgb' => '555555']],
+                $sheet->getStyle('A2:P2')->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 10, 'color' => ['rgb' => '333333']],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'E2EFDA']]
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'C8E6C9']]
                 ]);
                 $sheet->getRowDimension(2)->setRowHeight(25);
 
                 // Estilo Cabeceras de Columnas (Ahora en Fila 3)
                 $sheet->getRowDimension(3)->setRowHeight(40);
-                $sheet->getStyle('A3:O3')->applyFromArray([
+                $sheet->getStyle('A3:P3')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 9],
                     'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
@@ -239,14 +244,27 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
                 // Estilos de datos (Fila 4 en adelante)
                 $lastRow = $sheet->getHighestRow();
                 if ($lastRow >= 4) {
-                    $sheet->getStyle('A4:O' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-                    $sheet->getStyle('D4:O' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle('A4:P' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+                    $sheet->getStyle('D4:P' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                     // Formatos numéricos (0.0 para que se vea el cero)
                     $sheet->getStyle('I4:I' . $lastRow)->getNumberFormat()->setFormatCode('0.0');
                     $sheet->getStyle('L4:L' . $lastRow)->getNumberFormat()->setFormatCode('0.0');
                     $sheet->getStyle('M4:M' . $lastRow)->getNumberFormat()->setFormatCode('0.0');
                     $sheet->getStyle('M4:M' . $lastRow)->getFont()->setBold(true);
+
+                    // Colorear estado
+                    for ($i = 4; $i <= $lastRow; $i++) {
+                        $estadoCell = 'N' . $i;
+                        $estado = $sheet->getCell($estadoCell)->getValue();
+                        if ($estado === 'APROBADA') {
+                            $sheet->getStyle($estadoCell)->getFont()->getColor()->setRGB('2E7D32');
+                        } elseif ($estado === 'PENDIENTE') {
+                            $sheet->getStyle($estadoCell)->getFont()->getColor()->setRGB('F57C00');
+                        } elseif ($estado === 'RECHAZADA') {
+                            $sheet->getStyle($estadoCell)->getFont()->getColor()->setRGB('C62828');
+                        }
+                    }
                 }
 
                 $sheet->freezePane('A4');
@@ -254,3 +272,4 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
         ];
     }
 }
+
