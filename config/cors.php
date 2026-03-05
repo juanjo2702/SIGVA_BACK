@@ -19,6 +19,7 @@ return [
 
     'allowed_origins' => [
         'https://sigva.xpertiaplus.com',
+        'https://sigeth.xpertiaplus.com',
         'http://localhost:9000',
         'http://localhost:3000',
         'http://127.0.0.1:9000',
