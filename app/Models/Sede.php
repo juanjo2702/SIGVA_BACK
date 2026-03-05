@@ -14,7 +14,6 @@ class Sede extends Model
 
     protected $fillable = [
         'nombre',
-        'abreviacion',
         'sigla',
         'departamento',
         'activo',
@@ -24,12 +23,6 @@ class Sede extends Model
         'activo' => 'boolean',
     ];
 
-    protected $appends = ['sigla'];
-
-    public function getSiglaAttribute()
-    {
-        return $this->attributes['sigla'] ?? $this->abreviacion;
-    }
 
     /**
      * Relación con empleados
