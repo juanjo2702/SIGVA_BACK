@@ -36,7 +36,8 @@ class User extends Authenticatable implements JWTSubject
     protected $fillable = [
         'ci',
         'nombres',
-        'apellidos',
+        'apellido_paterno',
+        'apellido_materno',
         'email',
         'password',
         'rol_id',
@@ -136,7 +137,7 @@ class User extends Authenticatable implements JWTSubject
      */
     public function getNombreCompletoAttribute(): string
     {
-        return $this->nombres . ' ' . $this->apellidos;
+        return trim("{$this->nombres} {$this->apellido_paterno} {$this->apellido_materno}");
     }
 
     /**
