@@ -11,9 +11,11 @@ class System extends Model
 
     protected $fillable = ['key', 'nombre', 'descripcion', 'url', 'icono', 'color', 'activo'];
 
+    protected $appends = ['name'];
+
     public function getNameAttribute()
     {
-        return $this->key;
+        return $this->attributes['key'] ?? $this->nombre;
     }
 
     public function getDisplayNameAttribute()
@@ -22,6 +24,13 @@ class System extends Model
     }
 
     protected $casts = [
-        'active' => 'boolean',
+        'activo' => 'boolean',
     ];
+
+    public function users()
+    {
+        return $this->belongsToMany(User::class, 'application_user', 'application_id', 'user_id')
+                    ->withPivot('role', 'permissions')
+                    ->withTimestamps();
+    }
 }

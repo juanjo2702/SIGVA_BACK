@@ -112,8 +112,8 @@ class User extends Authenticatable implements JWTSubject
      */
     public function userSystems()
     {
-        return $this->belongsToMany(System::class, 'user_systems', 'user_id', 'system_id')
-                    ->withPivot('role_id', 'activo')
+        return $this->belongsToMany(System::class, 'application_user', 'user_id', 'application_id')
+                    ->withPivot('role', 'permissions')
                     ->withTimestamps();
     }
 
@@ -122,11 +122,13 @@ class User extends Authenticatable implements JWTSubject
      */
     public function getSystemsAttribute()
     {
-        // En producción puede que getAllPermissions falle si no hay pivot,
-        // pero asumimos que el trait funciona.
         try {
-            $systemIds = $this->getAllPermissions()->pluck('system_id')->unique()->filter();
-            return System::whereIn('id', $systemIds)->get();
+            return $this->getAllPermissions()
+                ->pluck('system')  // Uses the accessor that returns app name
+                ->unique()
+                ->filter()
+                ->values()
+                ->toArray();
         } catch (\Exception $e) {
             return [];
         }

@@ -33,7 +33,7 @@ trait HasSharedPermissions
     public function getPermissionsBySystem(string $systemName): Collection
     {
         return $this->getAllPermissions()->filter(function ($permission) use ($systemName) {
-            return $permission->systems && $permission->systems->name === $systemName;
+            return $permission->system && strtoupper($permission->system) === strtoupper($systemName);
         });
     }
 
@@ -50,7 +50,7 @@ trait HasSharedPermissions
      */
     public function getAccessibleSystems(): Collection
     {
-        $systemIds = $this->getAllPermissions()->pluck('system_id')->unique()->filter();
-        return \App\Models\System::whereIn('id', $systemIds)->get();
+        $appIds = $this->getAllPermissions()->pluck('application_id')->unique()->filter();
+        return \App\Models\System::whereIn('id', $appIds)->get();
     }
 }
