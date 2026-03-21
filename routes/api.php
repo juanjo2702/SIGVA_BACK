@@ -86,6 +86,10 @@ Route::middleware('auth:api')->group(function () {
         Route::put('/{id}/confirmar-documento', [SolicitudController::class, 'confirmarDocumento']);
         Route::put('/{id}/cancelar', [SolicitudController::class, 'cancelar']);
         Route::get('/{id}/formulario-pdf', [SolicitudController::class, 'generarFormulario']);
+        
+        // Rutas de Archivo de Respaldo
+        Route::post('/{id}/archivo-respaldo', [SolicitudController::class, 'subirRespaldo']);
+        Route::delete('/{id}/archivo-respaldo', [SolicitudController::class, 'eliminarRespaldo']);
     });
 
     // Calendario Compartido - Vista de vacaciones del equipo

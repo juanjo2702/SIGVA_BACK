@@ -6,14 +6,19 @@ use App\Models\SolicitudVacacion;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithTitle;
 
-class SolicitudesExport implements FromCollection, WithHeadings, WithMapping
+class SolicitudesExport implements FromCollection, WithHeadings, WithMapping, WithTitle
 {
     protected array $filtros;
+    protected ?\App\Models\Sede $sede = null;
 
     public function __construct(array $filtros = [])
     {
         $this->filtros = $filtros;
+        if (isset($this->filtros['sede_id']) && $this->filtros['sede_id'] !== 'todos' && $this->filtros['sede_id'] !== '') {
+            $this->sede = \App\Models\Sede::find($this->filtros['sede_id']);
+        }
     }
 
     public function collection()
@@ -28,7 +33,18 @@ class SolicitudesExport implements FromCollection, WithHeadings, WithMapping
             $query->where('estado', $this->filtros['estado']);
         }
 
+        if ($this->sede) {
+            $query->whereHas('empleado', function($q) {
+                $q->where('sede_id', $this->sede->id);
+            });
+        }
+
         return $query->orderBy('fecha_solicitud', 'desc')->get();
+    }
+
+    public function title(): string
+    {
+        return $this->sede ? substr($this->sede->nombre, 0, 31) : 'Solicitudes';
     }
 
     public function headings(): array

@@ -9,19 +9,24 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class EmpleadosExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithEvents
+class EmpleadosExport implements FromCollection, WithHeadings, WithMapping, WithStyles, ShouldAutoSize, WithEvents, WithTitle
 {
     protected array $filtros;
+    protected ?\App\Models\Sede $sede = null;
 
     public function __construct(array $filtros = [])
     {
         $this->filtros = $filtros;
+        if (isset($this->filtros['sede_id']) && $this->filtros['sede_id'] !== 'todos' && $this->filtros['sede_id'] !== '') {
+            $this->sede = \App\Models\Sede::find($this->filtros['sede_id']);
+        }
     }
 
     public function collection()
@@ -32,7 +37,16 @@ class EmpleadosExport implements FromCollection, WithHeadings, WithMapping, With
             $query->where('saldo_vacaciones', '<', 0);
         }
 
+        if ($this->sede) {
+            $query->where('sede_id', $this->sede->id);
+        }
+
         return $query->orderBy('apellido_paterno')->get();
+    }
+
+    public function title(): string
+    {
+        return $this->sede ? substr($this->sede->nombre, 0, 31) : 'Empleados';
     }
 
     public function headings(): array

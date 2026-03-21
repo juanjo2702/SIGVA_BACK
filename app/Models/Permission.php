@@ -18,11 +18,12 @@ class Permission extends Model
     public function getSystemAttribute()
     {
         if ($this->application_id) {
+            /** @var object|null $app */
             $app = \Illuminate\Support\Facades\DB::connection('core')
                 ->table('applications')
                 ->where('id', $this->application_id)
                 ->first();
-            return $app ? $app->nombre : null;
+            return ($app && isset($app->nombre)) ? $app->nombre : null;
         }
         return null;
     }

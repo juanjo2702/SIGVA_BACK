@@ -7,8 +7,11 @@ use App\Models\Empleado;
 use App\Models\SolicitudVacacion;
 use App\Models\HistorialVacacion;
 use App\Exports\EmpleadosExport;
+use App\Exports\EmpleadosMultipleExport;
 use App\Exports\SolicitudesExport;
+use App\Exports\SolicitudesMultipleExport;
 use App\Exports\ReporteGeneralExport;
+use App\Exports\ReporteGeneralMultipleExport;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Maatwebsite\Excel\Facades\Excel;
@@ -23,6 +26,9 @@ class ReporteController extends Controller
         $query = Empleado::activos();
 
         // Filtros
+        if ($request->has('sede_id') && $request->sede_id !== 'todos' && $request->sede_id !== '') {
+            $query->where('sede_id', $request->sede_id);
+        }
         if ($request->has('saldo_min')) {
             $query->where('saldo_vacaciones', '>=', $request->saldo_min);
         }
@@ -75,6 +81,12 @@ class ReporteController extends Controller
 
         $query = SolicitudVacacion::with('empleado')
             ->whereYear('fecha_solicitud', $ano);
+
+        if ($request->has('sede_id') && $request->sede_id !== 'todos' && $request->sede_id !== '') {
+            $query->whereHas('empleado', function($q) use ($request) {
+                $q->where('sede_id', $request->sede_id);
+            });
+        }
 
         if ($mes) {
             $query->whereMonth('fecha_solicitud', $mes);
@@ -137,13 +149,31 @@ class ReporteController extends Controller
     }
 
     /**
+     * Helper to get Sede Name safely for filenames
+     */
+    private function getSedeName($sedeId): string
+    {
+        $sede = \App\Models\Sede::find($sedeId);
+        if ($sede) {
+            return str_replace(' ', '_', mb_strtoupper($sede->nombre));
+        }
+        
+        return 'TODAS_LAS_SEDES';
+    }
+
+    /**
      * Exportar empleados a Excel
      */
     public function exportarEmpleados(Request $request)
     {
-        $filename = 'empleados_sigva_' . date('Y-m-d_His') . '.xlsx';
+        $filtros = $request->all();
+        $sedeName = $this->getSedeName($filtros['sede_id'] ?? null);
+        $filename = 'REPORTE_VACACIONES_SALDOS_' . $sedeName . '_' . date('d_m_Y') . '.xlsx';
+        if (isset($filtros['sede_id']) && $filtros['sede_id'] !== 'todos' && $filtros['sede_id'] !== '') {
+            return Excel::download(new EmpleadosExport($filtros), $filename);
+        }
 
-        return Excel::download(new EmpleadosExport($request->all()), $filename);
+        return Excel::download(new EmpleadosMultipleExport($filtros), $filename);
     }
 
     /**
@@ -151,9 +181,14 @@ class ReporteController extends Controller
      */
     public function exportarSolicitudes(Request $request)
     {
-        $filename = 'solicitudes_sigva_' . date('Y-m-d_His') . '.xlsx';
+        $filtros = $request->all();
+        $sedeName = $this->getSedeName($filtros['sede_id'] ?? null);
+        $filename = 'REPORTE_VACACIONES_SOLICITUDES_' . $sedeName . '_' . date('d_m_Y') . '.xlsx';
+        if (isset($filtros['sede_id']) && $filtros['sede_id'] !== 'todos' && $filtros['sede_id'] !== '') {
+            return Excel::download(new SolicitudesExport($filtros), $filename);
+        }
 
-        return Excel::download(new SolicitudesExport($request->all()), $filename);
+        return Excel::download(new SolicitudesMultipleExport($filtros), $filename);
     }
 
     /**
@@ -161,8 +196,13 @@ class ReporteController extends Controller
      */
     public function exportarReporteGeneral(Request $request)
     {
-        $filename = 'plan_vacaciones_' . date('Y-m-d_His') . '.xlsx';
+        $filtros = $request->all();
+        $sedeName = $this->getSedeName($filtros['sede_id'] ?? null);
+        $filename = 'PLAN_NACIONAL_VACACIONES_' . $sedeName . '_' . date('d_m_Y') . '.xlsx';
+        if (isset($filtros['sede_id']) && $filtros['sede_id'] !== 'todos' && $filtros['sede_id'] !== '') {
+            return Excel::download(new ReporteGeneralExport($filtros), $filename);
+        }
 
-        return Excel::download(new ReporteGeneralExport($request->all()), $filename);
+        return Excel::download(new ReporteGeneralMultipleExport($filtros), $filename);
     }
 }

@@ -140,7 +140,7 @@ class SolicitudServiceTest extends TestCase
         $this->crearSolicitud('pendiente');
         $this->crearSolicitud('aprobada');
 
-        $stats = $this->solicitudService->getEstadisticas();
+        $stats = $this->solicitudService->getEstadisticas(now()->year);
 
         $this->assertIsArray($stats);
         $this->assertArrayHasKey('pendientes', $stats);

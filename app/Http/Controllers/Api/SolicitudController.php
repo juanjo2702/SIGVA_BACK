@@ -391,4 +391,84 @@ class SolicitudController extends Controller
             'data' => $vacaciones,
         ]);
     }
+    /**
+     * Subir archivo de respaldo físico (PDF o Imagen)
+     */
+    public function subirRespaldo(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'archivo' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120', // Máx 5MB
+        ]);
+
+        $solicitud = SolicitudVacacion::findOrFail($id);
+
+        try {
+            // Eliminar archivo anterior si existe
+            if ($solicitud->archivo_respaldo_path) {
+                if (\Illuminate\Support\Facades\Storage::disk('public')->exists($solicitud->archivo_respaldo_path)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($solicitud->archivo_respaldo_path);
+                }
+            }
+
+            // Guardar nuevo archivo
+            // Estructura: respaldos/empleado_{id}/año/archivo.ext
+            $empleadoId = $solicitud->empleado_id;
+            $ano = $solicitud->fecha_solicitud->year;
+            
+            $path = $request->file('archivo')->store(
+                "respaldos/empleado_{$empleadoId}/{$ano}",
+                'public'
+            );
+
+            $solicitud->archivo_respaldo_path = $path;
+            $solicitud->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Archivo de respaldo subido correctamente.',
+                'data' => [
+                    'path' => $path,
+                    'url' => asset('storage/' . $path)
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al subir el archivo: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Eliminar archivo de respaldo
+     */
+    public function eliminarRespaldo(int $id): JsonResponse
+    {
+        $solicitud = SolicitudVacacion::findOrFail($id);
+
+        if (!$solicitud->archivo_respaldo_path) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No hay ningún archivo de respaldo para esta solicitud.',
+            ], 404);
+        }
+
+        try {
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($solicitud->archivo_respaldo_path)) {
+                \Illuminate\Support\Facades\Storage::disk('public')->delete($solicitud->archivo_respaldo_path);
+            }
+            $solicitud->archivo_respaldo_path = null;
+            $solicitud->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Archivo de respaldo eliminado.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al eliminar el archivo: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
 }
