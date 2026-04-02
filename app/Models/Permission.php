@@ -8,32 +8,24 @@ class Permission extends Model
 {
     protected $connection = 'core';
     protected $table = 'permissions';
+    protected $primaryKey = 'id_permision';
 
-    protected $fillable = ['name', 'guard_name', 'application_id', 'description'];
+    protected $fillable = ['nombres', 'sistema_id'];
 
-    /**
-     * Accessor: 'system' devuelve el nombre de la aplicación asociada.
-     * Permite que User->getSystemsAttribute() funcione correctamente.
-     */
-    public function getSystemAttribute()
+    // Compatibility accessor
+    protected $appends = ['name'];
+
+    public function getNameAttribute()
     {
-        if ($this->application_id) {
-            /** @var object|null $app */
-            $app = \Illuminate\Support\Facades\DB::connection('core')
-                ->table('applications')
-                ->where('id', $this->application_id)
-                ->first();
-            return ($app && isset($app->nombre)) ? $app->nombre : null;
-        }
-        return null;
+        return $this->nombres;
     }
 
     /**
-     * Accessor: 'system_id' mapeado a application_id para compatibilidad
+     * Accessor: 'system' devuelve el nombre de la aplicación asociada.
      */
-    public function getSystemIdAttribute()
+    public function getSystemAttribute()
     {
-        return $this->application_id;
+        return $this->sistema?->sistema;
     }
 
     public function roles()
@@ -41,8 +33,8 @@ class Permission extends Model
         return $this->belongsToMany(Rol::class, 'role_has_permissions', 'permission_id', 'role_id');
     }
 
-    public function application()
+    public function sistema()
     {
-        return $this->belongsTo(System::class, 'application_id');
+        return $this->belongsTo(System::class, 'sistema_id', 'id_sistema');
     }
 }

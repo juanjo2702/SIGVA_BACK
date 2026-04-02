@@ -8,23 +8,13 @@ use Illuminate\Support\Collection;
 trait HasSharedPermissions
 {
     /**
-     * Individual permissions assigned directly to the user
-     */
-    public function individualPermissions()
-    {
-        return $this->belongsToMany(Permission::class, 'model_has_permissions', 'model_id', 'permission_id')
-                    ->where('model_type', 'App\Models\User'); // Consistency across systems
-    }
-
-    /**
-     * Get all permissions (from role + individual)
+     * Get all permissions (from roles only)
      */
     public function getAllPermissions(): Collection
     {
-        $rolePermissions = $this->rol ? $this->rol->permissions : collect();
-        $individualPermissions = $this->individualPermissions;
-
-        return $rolePermissions->merge($individualPermissions)->unique('id');
+        return $this->roles->flatMap(function ($role) {
+            return $role->permissions;
+        })->unique('id_permision');
     }
 
     /**
@@ -42,7 +32,7 @@ trait HasSharedPermissions
      */
     public function hasPermissionTo(string $permissionName): bool
     {
-        return $this->getAllPermissions()->contains('name', $permissionName);
+        return $this->getAllPermissions()->contains('nombres', $permissionName);
     }
 
     /**
@@ -50,7 +40,7 @@ trait HasSharedPermissions
      */
     public function getAccessibleSystems(): Collection
     {
-        $appIds = $this->getAllPermissions()->pluck('application_id')->unique()->filter();
-        return \App\Models\System::whereIn('id', $appIds)->get();
+        $sysIds = $this->getAllPermissions()->pluck('sistema_id')->unique()->filter();
+        return \App\Models\System::whereIn('id_sistema', $sysIds)->get();
     }
 }

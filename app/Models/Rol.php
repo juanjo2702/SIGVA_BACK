@@ -11,37 +11,34 @@ class Rol extends Model
 
     protected $connection = 'core';
     protected $table = 'roles';
+    protected $primaryKey = 'id_rol';
 
     protected $fillable = [
-        'nombre',
-        'descripcion',
-        'guard_name',
-        'system_id',
-        'activo',
+        'nombres',
+        'sistema_id',
     ];
-
-    protected $casts = [
-        'activo' => 'boolean',
-    ];
-
-    // Para compatibilidad
-    protected $appends = ['name'];
-
-    public function getNameAttribute()
-    {
-        return $this->nombre;
-    }
 
     /**
      * Usuarios con este rol
      */
     public function usuarios()
     {
-        return $this->hasMany(User::class, 'rol_id');
+        return $this->belongsToMany(User::class, 'user_has_roles', 'role_id', 'user_id');
     }
 
     public function permissions()
     {
         return $this->belongsToMany(Permission::class, 'role_has_permissions', 'role_id', 'permission_id');
     }
+
+    public function sistema()
+    {
+        return $this->belongsTo(System::class, 'sistema_id', 'id_sistema');
+    }
+
+    // Compatibility accessors
+    protected $appends = ['name', 'nombre'];
+
+    public function getNameAttribute() { return $this->nombres; }
+    public function getNombreAttribute() { return $this->nombres; }
 }

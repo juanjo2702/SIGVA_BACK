@@ -7,20 +7,24 @@ use Illuminate\Database\Eloquent\Model;
 class System extends Model
 {
     protected $connection = 'core';
-    protected $table = 'applications';
+    protected $table = 'sistemas';
+    protected $primaryKey = 'id_sistema';
 
-    protected $fillable = ['key', 'nombre', 'descripcion', 'url', 'icono', 'color', 'activo'];
+    protected $fillable = [
+        'sistema',
+        'url_sistema',
+    ];
 
     protected $appends = ['name'];
 
     public function getNameAttribute()
     {
-        return $this->attributes['key'] ?? $this->nombre;
+        return $this->sistema;
     }
 
     public function getDisplayNameAttribute()
     {
-        return $this->nombre;
+        return $this->sistema;
     }
 
     protected $casts = [

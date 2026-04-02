@@ -15,6 +15,11 @@ class User extends Authenticatable implements JWTSubject
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasApiTokens, HasFactory, Notifiable, HasSharedPermissions;
+    
+    public function getMorphClass()
+    {
+        return 'user';
+    }
 
     /**
      * Use the 'core' connection for shared users table.
@@ -27,6 +32,7 @@ class User extends Authenticatable implements JWTSubject
      * @var string
      */
     protected $table = 'users';
+    protected $primaryKey = 'id_user';
 
     /**
      * The attributes that are mass assignable.
@@ -68,13 +74,13 @@ class User extends Authenticatable implements JWTSubject
      */
     public function getPermisosAttribute(): array
     {
-        return $this->getAllPermissions()->pluck('name')->toArray();
+        return $this->getAllPermissions()->pluck('nombres')->values()->toArray();
     }
 
     /**
      * Eager load relations by default
      */
-    protected $with = ['rol'];
+    protected $with = ['roles'];
 
     /**
      * Get the attributes that should be cast.
@@ -92,11 +98,19 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Relación con Rol
+     * Relación con Roles (Many-to-Many como en SIGETH)
      */
-    public function rol()
+    public function roles()
     {
-        return $this->belongsTo(Rol::class, 'rol_id');
+        return $this->belongsToMany(Rol::class, 'user_has_roles', 'user_id', 'role_id');
+    }
+
+    /**
+     * Get single role for backward compatibility (returns first role)
+     */
+    public function getRolAttribute()
+    {
+        return $this->roles->first();
     }
 
     /**
@@ -105,6 +119,14 @@ class User extends Authenticatable implements JWTSubject
     public function sede()
     {
         return $this->belongsTo(Sede::class, 'sede_id');
+    }
+
+    /**
+     * Relación con Persona (Shared in core)
+     */
+    public function persona()
+    {
+        return $this->belongsTo(Persona::class, 'id_persona', 'id_persona');
     }
 
     /**
@@ -177,7 +199,7 @@ class User extends Authenticatable implements JWTSubject
     public function getJWTCustomClaims()
     {
         return [
-            'rol_id' => $this->rol_id,
+            'id_rol' => $this->roles->first()?->id_rol,
             'ci' => $this->ci,
             // Add other helpful claims here to avoid DB lookups?
         ];
