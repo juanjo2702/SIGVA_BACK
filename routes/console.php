@@ -14,3 +14,9 @@ Schedule::command('vacaciones:suma-anual')
     ->dailyAt('00:01')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/suma-anual-vacaciones.log'));
+
+// SIGVA - Sincronizacion de sedes maestras desde SIGETH
+Schedule::command('sedes:sync-from-core')
+    ->dailyAt('00:10')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/sync-sedes-from-core.log'));

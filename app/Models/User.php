@@ -126,7 +126,7 @@ class User extends Authenticatable implements JWTSubject
      */
     public function persona()
     {
-        return $this->belongsTo(Persona::class, 'id_persona', 'id_persona');
+        return $this->belongsTo(Persona::class, 'id_persona', 'id');
     }
 
     /**
@@ -205,3 +205,5 @@ class User extends Authenticatable implements JWTSubject
         ];
     }
 }
+
+

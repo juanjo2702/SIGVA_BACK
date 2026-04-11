@@ -229,10 +229,9 @@ class EmpleadoController extends Controller
     {
         $request->validate([
             'archivo' => 'required|file|mimes:xlsx,xls,csv|max:10240',
-            'sede_id' => 'required|exists:sedes,id',
+            'sede_id' => 'nullable|exists:sedes,id',
         ], [
-            'sede_id.required' => 'Debe seleccionar una sede para asignar a los empleados.',
-            'sede_id.exists' => 'La sede seleccionada no existe.',
+            'sede_id.exists' => 'La sede de respaldo seleccionada no existe.',
         ]);
 
         try {

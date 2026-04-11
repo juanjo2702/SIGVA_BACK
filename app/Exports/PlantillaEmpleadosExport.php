@@ -23,7 +23,7 @@ class PlantillaEmpleadosExport implements FromArray, WithHeadings, WithStyles, W
                 '1234567',
                 'Masculino',
                 'Completo',
-                'Oficina Central - La Paz',
+                'LA PAZ',
                 'AUXILIAR ADMINISTRATIVO',
                 '2020-01-15',
                 15.5
@@ -35,7 +35,7 @@ class PlantillaEmpleadosExport implements FromArray, WithHeadings, WithStyles, W
                 '7654321',
                 'Femenino',
                 'Medio Tiempo',
-                'Sucursal Cochabamba',
+                'COCHABAMBA',
                 'SECRETARIA',
                 '2019-06-01',
                 20.0

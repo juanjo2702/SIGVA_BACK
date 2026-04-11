@@ -4,6 +4,7 @@ namespace App\Imports;
 
 use App\Models\Empleado;
 use App\Models\HistorialVacacion;
+use App\Models\Sede;
 use Maatwebsite\Excel\Concerns\ToModel;
 use Maatwebsite\Excel\Concerns\WithHeadingRow;
 use Maatwebsite\Excel\Concerns\WithValidation;
@@ -44,6 +45,7 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
         // Nuevos campos: género y tipo de contrato (sede viene del frontend)
         $genero = $this->normalizarGenero($row['genero'] ?? $row['sexo'] ?? null);
         $tipoContrato = $this->normalizarTipoContrato($row['tipo_contrato'] ?? $row['contrato'] ?? $row['tipo'] ?? null);
+        $sedeTexto = $row['sede'] ?? $row['sedes'] ?? $row['campus'] ?? $row['ubicacion'] ?? $row['regional'] ?? null;
 
         if (!$ci || !$apellidoPaterno || !$nombres) {
             $this->errores[] = "Fila con datos incompletos: CI={$ci}";
@@ -52,6 +54,12 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
 
         // Limpiar CI (quitar espacios y caracteres especiales)
         $ci = preg_replace('/[^0-9A-Za-z]/', '', trim($ci));
+        $sedeIdResuelta = $this->resolverSedeId($sedeTexto);
+
+        if ($sedeTexto && !$sedeIdResuelta) {
+            $this->errores[] = "No se pudo resolver la sede '{$sedeTexto}' para el CI {$ci}";
+            return null;
+        }
 
         // Parsear fecha
         try {
@@ -82,7 +90,7 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
                 'saldo_vacaciones' => floatval($saldoDias),
                 'genero' => $genero ?? $empleadoExistente->genero,
                 'tipo_contrato' => $tipoContrato ?? $empleadoExistente->tipo_contrato,
-                'sede_id' => $this->sedeId ?? $empleadoExistente->sede_id,
+                'sede_id' => $sedeIdResuelta ?? $this->sedeId ?? $empleadoExistente->sede_id,
                 'activo' => true,
             ]);
 
@@ -113,7 +121,7 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
             'saldo_vacaciones' => floatval($saldoDias),
             'genero' => $genero,
             'tipo_contrato' => $tipoContrato ?? Empleado::CONTRATO_COMPLETO,
-            'sede_id' => $this->sedeId,
+            'sede_id' => $sedeIdResuelta ?? $this->sedeId,
             'activo' => true,
         ]);
 
@@ -171,6 +179,47 @@ class EmpleadosImport implements ToModel, WithHeadingRow, WithValidation, SkipsO
     /**
      * Reglas de validación
      */
+    protected function resolverSedeId(?string $valor): ?int
+    {
+        if (!$valor) {
+            return $this->sedeId;
+        }
+
+        $valorNormalizado = $this->normalizarTexto($valor);
+
+        $sede = Sede::all()->first(function (Sede $sede) use ($valorNormalizado) {
+            $candidatos = array_filter([
+                $sede->nombre,
+                $sede->abreviacion ?? null,
+                $sede->sigla ?? null,
+                $sede->departamento ?? null,
+            ]);
+
+            foreach ($candidatos as $candidato) {
+                if ($this->normalizarTexto((string) $candidato) === $valorNormalizado) {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+
+        return $sede?->id;
+    }
+
+    protected function normalizarTexto(string $valor): string
+    {
+        $valor = trim(mb_strtoupper($valor, 'UTF-8'));
+        $valor = str_replace(
+            ['Á', 'É', 'Í', 'Ó', 'Ú', 'Ñ'],
+            ['A', 'E', 'I', 'O', 'U', 'N'],
+            $valor
+        );
+        $valor = preg_replace('/\s+/', ' ', $valor);
+
+        return $valor;
+    }
+
     public function rules(): array
     {
         return [

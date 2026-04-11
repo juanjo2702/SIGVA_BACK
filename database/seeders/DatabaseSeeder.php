@@ -14,7 +14,8 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // Crear roles base
+        // Crear roles base (Gestionados en SIGETH SSO)
+        /*
         $rolAdmin = Rol::create([
             'nombre' => 'Administrador',
             'descripcion' => 'Acceso total al sistema',
@@ -27,7 +28,7 @@ class DatabaseSeeder extends Seeder
             'activo' => true,
         ]);
 
-        // Crear usuario administrador principal - Juan José Mamani Via
+        // Crear usuario administrador principal (Gestionado en SIGETH SSO)
         User::create([
             'ci' => '5927724',
             'name' => 'Juan José',
@@ -39,5 +40,6 @@ class DatabaseSeeder extends Seeder
             'activo' => true,
             'must_change_password' => true,
         ]);
+        */
     }
 }

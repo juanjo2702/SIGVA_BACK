@@ -141,17 +141,20 @@ class EmpleadoPublicoController extends Controller
 
         $request->validate([
             'empleado_id' => 'required|exists:empleados,id',
-            'dias' => 'required|array|min:1',
-            'dias.*.fecha' => 'required|date|after_or_equal:' . $fechaMinima,
-            'dias.*.tipo' => 'required|in:completo,parcial_manana,parcial_tarde',
+            'dias' => 'required', // Puede ser array o string JSON
             'lugar_solicitud' => 'nullable|string|max:255',
             'reemplazo' => 'nullable|string|max:255',
+            'archivo_respaldo' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ], [
             'dias.*.fecha.after_or_equal' => 'Las vacaciones deben solicitarse con al menos 1 día de anticipación (desde mañana).',
         ]);
 
         $empleado = \App\Models\Empleado::findOrFail($request->empleado_id);
-        $diasData = collect($request->dias)->sortBy('fecha');
+        $diasArr = $request->dias;
+        if (is_string($diasArr)) {
+            $diasArr = json_decode($diasArr, true);
+        }
+        $diasData = collect($diasArr)->sortBy('fecha');
 
         // Validar y calcular usando el servicio
         $validacion = $this->vacacionesService->calcularDiasDesdeArray($diasData->toArray(), $empleado);
@@ -179,7 +182,8 @@ class EmpleadoPublicoController extends Controller
             'dias_solicitados' => $validacion['total'],
             'estado' => SolicitudVacacion::ESTADO_PENDIENTE,
             'lugar_solicitud' => $request->lugar_solicitud,
-            'texto_reemplazo' => $request->reemplazo,
+            'nombre_reemplazo' => $request->reemplazo,
+            'tiene_reemplazo' => !!$request->reemplazo,
         ]);
 
         // Crear detalles de cada día
@@ -191,14 +195,35 @@ class EmpleadoPublicoController extends Controller
             ]);
         }
 
+        // Manejar archivo de respaldo si se subió
+        if ($request->hasFile('archivo_respaldo')) {
+            $path = $request->file('archivo_respaldo')->store(
+                "respaldos/empleado_{$empleado->id}/" . date('Y'),
+                'public'
+            );
+            $solicitud->archivo_respaldo_path = $path;
+            $solicitud->save();
+
+            // Auto-aprobar si hay respaldo
+            try {
+                // Usamos el servicio de solicitudes para aprobar y descontar días
+                $solicitudService = app(\App\Services\SolicitudService::class);
+                $solicitud = $solicitudService->aprobar($solicitud);
+                $mensajeAprobacion = ' La solicitud ha sido aprobada automáticamente al adjuntar el respaldo.';
+            } catch (\Exception $e) {
+                \Illuminate\Support\Facades\Log::error("Error en auto-aprobación SIGVA: " . $e->getMessage());
+            }
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Solicitud creada correctamente. Pendiente de aprobación por Talento Humano.',
+            'message' => 'Solicitud creada correctamente.' . ($mensajeAprobacion ?? ' Pendiente de aprobación por Talento Humano.'),
             'data' => [
                 'solicitud' => $solicitud->load('empleado', 'detalles'),
                 'dias_solicitados' => $validacion['total'],
                 'saldo_actual' => $empleado->saldo_vacaciones,
                 'saldo_resultante' => $validacion['saldo_resultante'],
+                'archivo_url' => $solicitud->archivo_respaldo_path ? asset('storage/' . $solicitud->archivo_respaldo_path) : null
             ],
         ], 201);
     }

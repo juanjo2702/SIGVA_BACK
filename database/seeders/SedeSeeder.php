@@ -14,21 +14,19 @@ class SedeSeeder extends Seeder
     public function run(): void
     {
         $sedes = [
-            ['nombre' => 'COCHABAMBA', 'abreviacion' => 'CBBA', 'departamento' => 'Cochabamba'],
-            ['nombre' => 'LA PAZ', 'abreviacion' => 'LP', 'departamento' => 'La Paz'],
-            ['nombre' => 'SANTA CRUZ', 'abreviacion' => 'SCZ', 'departamento' => 'Santa Cruz'],
-            ['nombre' => 'EL ALTO', 'abreviacion' => 'ALTO', 'departamento' => 'La Paz'],
-            ['nombre' => 'COBIJA', 'abreviacion' => 'CB', 'departamento' => 'Pando'],
-            ['nombre' => 'IVIRGARZAMA', 'abreviacion' => 'IVI', 'departamento' => 'Cochabamba'],
-            ['nombre' => 'PUERTO QUIJARRO', 'abreviacion' => 'PQ', 'departamento' => 'Santa Cruz'],
-            ['nombre' => 'GUAYARAMERIN', 'abreviacion' => 'GYA', 'departamento' => 'Beni'],
+            ['id' => 1, 'nombre' => 'LA PAZ', 'abreviacion' => 'LPZ', 'departamento' => 'LA PAZ'],
+            ['id' => 2, 'nombre' => 'EL ALTO', 'abreviacion' => 'EAL', 'departamento' => 'LA PAZ'],
+            ['id' => 3, 'nombre' => 'COCHABAMBA', 'abreviacion' => 'COC', 'departamento' => 'COCHABAMBA'],
+            ['id' => 4, 'nombre' => 'IVIRGARZAMA', 'abreviacion' => 'IVI', 'departamento' => 'COCHABAMBA'],
+            ['id' => 5, 'nombre' => 'GUAYARAMERIN', 'abreviacion' => 'GYA', 'departamento' => 'BENI'],
+            ['id' => 6, 'nombre' => 'SANTA CRUZ', 'abreviacion' => 'SCZ', 'departamento' => 'SANTA CRUZ'],
+            ['id' => 7, 'nombre' => 'PUERTO QUIJARRO', 'abreviacion' => 'PQJ', 'departamento' => 'SANTA CRUZ'],
+            ['id' => 8, 'nombre' => 'COBIJA', 'abreviacion' => 'CBJ', 'departamento' => 'PANDO'],
+            ['id' => 9, 'nombre' => 'NACIONAL', 'abreviacion' => 'NAC', 'departamento' => 'NACIONAL'],
         ];
 
         foreach ($sedes as $sede) {
-            Sede::firstOrCreate(
-                ['abreviacion' => $sede['abreviacion']],
-                $sede
-            );
+            Sede::updateOrCreate(['id' => $sede['id']], $sede);
         }
     }
 }

@@ -423,12 +423,22 @@ class SolicitudController extends Controller
             $solicitud->archivo_respaldo_path = $path;
             $solicitud->save();
 
+            // Auto-aprobación si se sube el respaldo y la solicitud está pendiente
+            $fueAprobada = false;
+            if ($solicitud->estado === \App\Models\SolicitudVacacion::ESTADO_PENDIENTE) {
+                app(\App\Services\SolicitudService::class)->aprobar($solicitud);
+                $fueAprobada = true;
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Archivo de respaldo subido correctamente.',
+                'message' => $fueAprobada 
+                    ? 'Archivo de respaldo subido correctamente. Su solicitud ha sido APROBADA automáticamente.' 
+                    : 'Archivo de respaldo subido correctamente.',
                 'data' => [
                     'path' => $path,
-                    'url' => asset('storage/' . $path)
+                    'url' => asset('storage/' . $path),
+                    'estado' => $solicitud->estado
                 ]
             ]);
         } catch (\Exception $e) {

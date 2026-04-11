@@ -49,7 +49,7 @@ class AuthController extends Controller
 
         // Get the authenticated user
         $user = auth('api')->user();
-        $user->load(['userSystems', 'roles.permissions', 'sede']);
+        $user->load(['roles.permissions', 'sede', 'persona']);
 
         // Verificar que el usuario esté activo
         if (!$user->activo) {
@@ -121,7 +121,7 @@ class AuthController extends Controller
     public function me(Request $request): JsonResponse
     {
         $user = $request->user();
-        $user->load(['userSystems', 'roles.permissions', 'sede']);
+        $user->load(['roles.permissions', 'sede', 'persona']);
         return response()->json([
             'success' => true,
             'data' => $user,
