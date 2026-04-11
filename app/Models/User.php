@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\HasApiTokens;
 use Tymon\JWTAuth\Contracts\JWTSubject;
 
@@ -21,6 +22,26 @@ class User extends Authenticatable implements JWTSubject
         return 'user';
     }
 
+    public function getKeyName()
+    {
+        static $primaryKey;
+
+        if ($primaryKey) {
+            return $primaryKey;
+        }
+
+        $primaryKey = Schema::connection($this->getConnectionName())->hasColumn($this->getTable(), 'id_user')
+            ? 'id_user'
+            : 'id';
+
+        return $primaryKey;
+    }
+
+    public function getIdUserAttribute()
+    {
+        return $this->attributes['id_user'] ?? $this->getAttributeFromArray($this->getKeyName());
+    }
+
     /**
      * Use the 'core' connection for shared users table.
      */
@@ -32,7 +53,6 @@ class User extends Authenticatable implements JWTSubject
      * @var string
      */
     protected $table = 'users';
-    protected $primaryKey = 'id_user';
 
     /**
      * The attributes that are mass assignable.
