@@ -54,7 +54,7 @@ Route::middleware('throttle:15,1')->group(function () {
 // =============================================
 // RUTAS PROTEGIDAS (requieren autenticación - RRHH)
 // =============================================
-Route::middleware('auth:api')->group(function () {
+Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
