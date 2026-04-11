@@ -24,40 +24,23 @@ class AuthController extends Controller
         // Buscar usuario por CI
         $user = \App\Models\User::where('ci', $request->ci)->first();
 
-        // Verificar credenciales con attempt (JWT lo hace automáticamente, pero podemos pre-verificar si queremos)
-        // Sin embargo, para JWT standard, usamos auth()->attempt.
-        // Como estamos modificando el flow, eliminamos la verificacion manual si usamos attempt abajo.
-        // Pero el codigo original hacia verificaciones manuales.
-        // Vamos a simplificar usando attempt.
-
-
-        // Verificar que el usuario esté activo
-        if (!$user->activo) {
-            throw ValidationException::withMessages([
-                'ci' => ['Esta cuenta ha sido desactivada.'],
-            ]);
-        }
-
-        // JWT Auth
-        $credentials = $request->only('ci', 'password');
-
-        if (! $token = auth('api')->attempt($credentials)) {
+        if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
                 'ci' => ['Las credenciales proporcionadas son incorrectas.'],
             ]);
         }
 
-        // Get the authenticated user
-        $user = auth('api')->user();
-        $user->load(['roles.permissions', 'sede', 'persona']);
-
         // Verificar que el usuario esté activo
         if (!$user->activo) {
-             auth('api')->logout();
             throw ValidationException::withMessages([
                 'ci' => ['Esta cuenta ha sido desactivada.'],
             ]);
         }
+
+        // Generar Token de Sanctum
+        $token = $user->createToken('sigva-token')->plainTextToken;
+
+        $user->load(['roles.permissions', 'sede', 'persona']);
 
         return response()->json([
             'success' => true,
@@ -66,7 +49,6 @@ class AuthController extends Controller
                 'user' => $user,
                 'token' => $token,
                 'token_type' => 'bearer',
-                'expires_in' => auth('api')->factory()->getTTL() * 60,
                 'must_change_password' => $user->must_change_password,
             ],
         ]);
@@ -107,7 +89,7 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        auth('api')->logout();
+        $request->user()->currentAccessToken()->delete();
 
         return response()->json([
             'success' => true,
