@@ -13,15 +13,9 @@ class AuthenticateSharedSanctumToken
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
+        $plainTextToken = $request->bearerToken();
 
-        if (!$user) {
-            $plainTextToken = $request->bearerToken();
-
-            if (!$plainTextToken) {
-                return $this->unauthorized();
-            }
-
+        if ($plainTextToken) {
             $accessToken = PersonalAccessToken::findToken($plainTextToken);
 
             if (!$accessToken) {
@@ -41,8 +35,12 @@ class AuthenticateSharedSanctumToken
             $user->withAccessToken($accessToken);
             $accessToken->forceFill(['last_used_at' => now()])->save();
 
+            Auth::shouldUse('sanctum');
             Auth::setUser($user);
+            $request->attributes->set('shared_access_token', $accessToken);
             $request->setUserResolver(static fn () => $user);
+        } elseif (!$request->user()) {
+            return $this->unauthorized();
         }
 
         return $next($request);
