@@ -100,7 +100,7 @@ class User extends Authenticatable implements JWTSubject
     /**
      * Eager load relations by default
      */
-    protected $with = ['roles'];
+    protected $with = [];
 
     /**
      * Get the attributes that should be cast.
@@ -130,7 +130,11 @@ class User extends Authenticatable implements JWTSubject
      */
     public function getRolAttribute()
     {
-        return $this->roles->first();
+        try {
+            return $this->roles->first();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

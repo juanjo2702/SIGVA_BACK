@@ -12,9 +12,13 @@ trait HasSharedPermissions
      */
     public function getAllPermissions(): Collection
     {
-        return $this->roles->flatMap(function ($role) {
-            return $role->permissions;
-        })->unique('id_permision');
+        try {
+            return $this->roles->flatMap(function ($role) {
+                return $role->permissions;
+            })->unique('id_permision');
+        } catch (\Throwable) {
+            return collect();
+        }
     }
 
     /**
