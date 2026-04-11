@@ -2,11 +2,13 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\User;
 use App\Models\Sanctum\PersonalAccessToken;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
 class AuthenticateSharedSanctumToken
@@ -18,7 +20,19 @@ class AuthenticateSharedSanctumToken
         if ($plainTextToken) {
             $accessToken = PersonalAccessToken::findToken($plainTextToken);
 
+            if (!$accessToken && str_contains($plainTextToken, '|')) {
+                [$tokenId, $tokenValue] = explode('|', $plainTextToken, 2);
+                $candidate = PersonalAccessToken::query()->find($tokenId);
+
+                if ($candidate && hash_equals($candidate->token, hash('sha256', $tokenValue))) {
+                    $accessToken = $candidate;
+                }
+            }
+
             if (!$accessToken) {
+                Log::warning('SIGVA shared auth: token not found', [
+                    'token_prefix' => substr($plainTextToken, 0, 12),
+                ]);
                 return $this->unauthorized();
             }
 
@@ -28,7 +42,16 @@ class AuthenticateSharedSanctumToken
 
             $user = $accessToken->tokenable;
 
-            if (!$user || (property_exists($user, 'activo') && !$user->activo)) {
+            if (!$user && $accessToken->tokenable_id) {
+                $user = User::query()->find($accessToken->tokenable_id);
+            }
+
+            if (!$user || (($user->activo ?? true) === false)) {
+                Log::warning('SIGVA shared auth: user could not be resolved from token', [
+                    'token_id' => $accessToken->getKey(),
+                    'tokenable_type' => $accessToken->tokenable_type,
+                    'tokenable_id' => $accessToken->tokenable_id,
+                ]);
                 return $this->unauthorized();
             }
 
@@ -40,6 +63,7 @@ class AuthenticateSharedSanctumToken
             $request->attributes->set('shared_access_token', $accessToken);
             $request->setUserResolver(static fn () => $user);
         } elseif (!$request->user()) {
+            Log::warning('SIGVA shared auth: missing bearer token');
             return $this->unauthorized();
         }
 
