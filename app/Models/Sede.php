@@ -13,6 +13,13 @@ class Sede extends Model
     protected $table = 'sedes';
     protected $primaryKey = 'id_sede';
 
+    protected $appends = ['id'];
+
+    public function getIdAttribute()
+    {
+        return $this->id_sede;
+    }
+
     protected $fillable = [
         'nombre',
         'sigla',
