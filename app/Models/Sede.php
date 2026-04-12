@@ -9,6 +9,7 @@ class Sede extends Model
 {
     use HasFactory;
 
+    protected $connection = 'core';
     protected $table = 'sedes';
 
     protected $fillable = [
