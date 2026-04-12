@@ -10,11 +10,7 @@ class Sede extends Model
     use HasFactory;
 
     protected $connection = 'core';
-
-    public function getTable()
-    {
-        return config('database.connections.core.database') . '.sedes';
-    }
+    protected $table = 'sedes';
 
     protected $fillable = [
         'nombre',
