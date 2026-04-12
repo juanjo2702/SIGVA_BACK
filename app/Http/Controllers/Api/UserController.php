@@ -74,7 +74,7 @@ class UserController extends Controller
             'apellido_materno' => 'nullable|string|max:255',
             'email' => 'nullable|email|unique:core.users,email',
             'rol_id' => 'required|exists:core.roles,id',
-            'sede_id' => 'nullable|exists:core.sedes,id',
+            'sede_id' => 'nullable|exists:core.sedes,id_sede',
             'activo' => 'boolean',
         ], [
             'ci.required' => 'El CI es obligatorio',
@@ -124,7 +124,7 @@ class UserController extends Controller
             'apellido_materno' => 'nullable|string|max:255',
             'email' => 'nullable|email|unique:core.users,email,' . $user->id,
             'rol_id' => 'required|exists:core.roles,id',
-            'sede_id' => 'nullable|exists:core.sedes,id',
+            'sede_id' => 'nullable|exists:core.sedes,id_sede',
             'activo' => 'boolean',
         ], [
             'ci.required' => 'El CI es obligatorio',

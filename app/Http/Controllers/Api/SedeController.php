@@ -98,8 +98,8 @@ class SedeController extends Controller
         $sede = Sede::findOrFail($id);
 
         $validated = $request->validate([
-            'nombre' => 'required|string|max:100|unique:sedes,nombre,' . $id,
-            'abreviacion' => 'required|string|max:10|unique:sedes,abreviacion,' . $id,
+            'nombre' => 'required|string|max:100|unique:sedes,nombre,' . $id . ',id_sede',
+            'abreviacion' => 'required|string|max:10|unique:sedes,abreviacion,' . $id . ',id_sede',
             'departamento' => 'required|string|max:100',
             'activo' => 'boolean',
         ]);

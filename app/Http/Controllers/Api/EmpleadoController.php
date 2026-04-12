@@ -128,7 +128,7 @@ class EmpleadoController extends Controller
             'ci' => 'required|string|max:20|unique:empleados,ci|regex:/^[0-9]{4,10}(-[0-9]?[A-Za-z]{1,2})?$/',
             'genero' => 'nullable|in:Masculino,Femenino',
             'tipo_contrato' => 'nullable|in:completo,medio_tiempo',
-            'sede_id' => 'nullable|exists:sedes,id',
+            'sede_id' => 'nullable|exists:sedes,id_sede',
             'cargo' => 'required|string|max:100',
             'fecha_ingreso' => 'required|date',
             'saldo_vacaciones' => 'nullable|numeric',
@@ -178,7 +178,7 @@ class EmpleadoController extends Controller
             'ci' => 'sometimes|required|string|max:20|unique:empleados,ci,' . $id . '|regex:/^[0-9]{4,10}(-[0-9]?[A-Za-z]{1,2})?$/',
             'genero' => 'nullable|in:Masculino,Femenino',
             'tipo_contrato' => 'nullable|in:completo,medio_tiempo',
-            'sede_id' => 'nullable|exists:sedes,id',
+            'sede_id' => 'nullable|exists:sedes,id_sede',
             'cargo' => 'sometimes|required|string|max:100',
             'fecha_ingreso' => 'sometimes|required|date',
             'activo' => 'nullable|boolean',
@@ -229,7 +229,7 @@ class EmpleadoController extends Controller
     {
         $request->validate([
             'archivo' => 'required|file|mimes:xlsx,xls,csv|max:10240',
-            'sede_id' => 'nullable|exists:sedes,id',
+            'sede_id' => 'nullable|exists:sedes,id_sede',
         ], [
             'sede_id.exists' => 'La sede de respaldo seleccionada no existe.',
         ]);
