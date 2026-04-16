@@ -114,6 +114,8 @@ class EmpleadoPublicoController extends Controller
             'fecha_fin' => $request->fecha_fin,
             'tipo' => $request->tipo,
             'dias_solicitados' => $validacion['dias'],
+            'saldo_actual' => $empleado->saldo_vacaciones,
+            'saldo_despues' => $validacion['saldo_resultante'],
             'estado' => SolicitudVacacion::ESTADO_PENDIENTE,
             'lugar_solicitud' => $request->lugar_solicitud,
         ]);
@@ -180,6 +182,8 @@ class EmpleadoPublicoController extends Controller
             'fecha_fin' => $ultimaFecha,
             'tipo' => $tipoDetectado,
             'dias_solicitados' => $validacion['total'],
+            'saldo_actual' => $empleado->saldo_vacaciones,
+            'saldo_despues' => $validacion['saldo_resultante'],
             'estado' => SolicitudVacacion::ESTADO_PENDIENTE,
             'lugar_solicitud' => $request->lugar_solicitud,
             'nombre_reemplazo' => $request->reemplazo,

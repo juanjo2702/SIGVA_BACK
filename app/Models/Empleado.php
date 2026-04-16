@@ -88,9 +88,29 @@ class Empleado extends Model
         return $this->fecha_ingreso->diffInYears(Carbon::now());
     }
 
+    public function getAnosServicioEnFecha(Carbon $fecha): int
+    {
+        return $this->fecha_ingreso->copy()->diffInYears($fecha);
+    }
+
     public function getDiasCorrespondientesAttribute(): int
     {
         $anos = $this->anos_servicio;
+
+        if ($anos >= 10) {
+            return 30;
+        } elseif ($anos >= 5) {
+            return 20;
+        } elseif ($anos >= 1) {
+            return 15;
+        }
+
+        return 0; // Menos de 1 aÃ±o no tiene vacaciones
+    }
+
+    public function getDiasCorrespondientesEnFecha(Carbon $fecha): int
+    {
+        $anos = $this->getAnosServicioEnFecha($fecha);
 
         if ($anos >= 10) {
             return 30;

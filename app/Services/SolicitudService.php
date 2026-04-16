@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Empleado;
 use App\Models\SolicitudVacacion;
 use App\Models\DetalleSolicitudVacacion;
+use App\Models\HistorialVacacion;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -50,6 +51,11 @@ class SolicitudService
             throw new \InvalidArgumentException('Solo se pueden aprobar solicitudes pendientes.');
         }
 
+        if ($solicitud->saldo_actual === null || $solicitud->saldo_despues === null) {
+            $solicitud->saldo_actual = $solicitud->empleado->saldo_vacaciones;
+            $solicitud->saldo_despues = $solicitud->empleado->saldo_vacaciones - $solicitud->dias_solicitados;
+        }
+
         // Aprobar
         $solicitud->estado = SolicitudVacacion::ESTADO_APROBADA;
         $solicitud->save();
@@ -93,6 +99,11 @@ class SolicitudService
     {
         if (!$solicitud->esPendienteDocumento()) {
             throw new \InvalidArgumentException('Solo se puede confirmar documento para solicitudes en estado "pendiente_documento".');
+        }
+
+        if ($solicitud->saldo_actual === null || $solicitud->saldo_despues === null) {
+            $solicitud->saldo_actual = $solicitud->empleado->saldo_vacaciones;
+            $solicitud->saldo_despues = $solicitud->empleado->saldo_vacaciones - $solicitud->dias_solicitados;
         }
 
         // Marcar documento como entregado y aprobar
@@ -184,6 +195,8 @@ class SolicitudService
             'fecha_fin' => $ultimaFecha,
             'tipo' => $tipoDetectado,
             'dias_solicitados' => $validacion['dias'],
+            'saldo_actual' => $empleado->saldo_vacaciones,
+            'saldo_despues' => $validacion['saldo_resultante'],
             'estado' => SolicitudVacacion::ESTADO_PENDIENTE_DOCUMENTO,
             'lugar_solicitud' => 'Programada por Talento Humano',
             'tiene_reemplazo' => $tieneReemplazo,
@@ -220,6 +233,12 @@ class SolicitudService
     public function generarDatosFormulario(SolicitudVacacion $solicitud): array
     {
         $empleado = $solicitud->empleado;
+        $saldoHistorico = $this->resolverSaldoHistorico($solicitud);
+        $fechaCorte = $solicitud->fecha_solicitud instanceof Carbon
+            ? $solicitud->fecha_solicitud
+            : Carbon::parse($solicitud->fecha_solicitud);
+        $anosServicioHistorico = $empleado->getAnosServicioEnFecha($fechaCorte);
+        $diasCorrespondientesHistoricos = $empleado->getDiasCorrespondientesEnFecha($fechaCorte);
 
         return [
             'empleado' => [
@@ -228,8 +247,8 @@ class SolicitudService
                 'cargo' => $empleado->cargo,
                 'sede' => $empleado->sede?->nombre ?? 'Sin asignar',
                 'fecha_ingreso' => $empleado->fecha_ingreso->format('d/m/Y'),
-                'anos_servicio' => $empleado->anos_servicio,
-                'dias_correspondientes' => $empleado->dias_correspondientes,
+                'anos_servicio' => $anosServicioHistorico,
+                'dias_correspondientes' => $diasCorrespondientesHistoricos,
                 'genero' => $empleado->genero ?? 'No especificado',
                 'tipo_contrato' => $empleado->tipo_contrato === 'medio_tiempo' ? 'Medio Tiempo' : 'Tiempo Completo',
             ],
@@ -247,12 +266,8 @@ class SolicitudService
                 // Si está aprobada, el saldo YA fue descontado, entonces:
                 // - 'actual' = saldo ANTES de aprobar (saldo_vacaciones + dias_solicitados)
                 // - 'despues' = saldo actual (ya descontado)
-                'actual' => $solicitud->esAprobada()
-                    ? $empleado->saldo_vacaciones + $solicitud->dias_solicitados
-                    : $empleado->saldo_vacaciones,
-                'despues' => $solicitud->esAprobada()
-                    ? $empleado->saldo_vacaciones
-                    : $empleado->saldo_vacaciones - $solicitud->dias_solicitados,
+                'actual' => $saldoHistorico['actual'],
+                'despues' => $saldoHistorico['despues'],
             ],
             // SIEMPRE calcular etapas para mostrar el calendario
             'etapas' => $this->agruparDiasEnEtapas($solicitud),
@@ -473,6 +488,44 @@ class SolicitudService
         };
     }
 
+    private function resolverSaldoHistorico(SolicitudVacacion $solicitud): array
+    {
+        if ($solicitud->esAprobada()) {
+            $historiales = HistorialVacacion::query()
+                ->where('empleado_id', $solicitud->empleado_id)
+                ->where('tipo_cambio', HistorialVacacion::TIPO_SOLICITUD_APROBADA)
+                ->where('descripcion', "Solicitud de vacaciones #{$solicitud->id} aprobada")
+                ->orderBy('id')
+                ->get();
+
+            if ($historiales->isNotEmpty()) {
+                $historialOriginal = $historiales->first();
+                $saldoActual = (float) $historialOriginal->dias_anteriores;
+
+                return [
+                    'actual' => $saldoActual,
+                    'despues' => $saldoActual - (float) $solicitud->dias_solicitados,
+                ];
+            }
+        }
+
+        if ($solicitud->saldo_actual !== null && $solicitud->saldo_despues !== null) {
+            return [
+                'actual' => (float) $solicitud->saldo_actual,
+                'despues' => (float) $solicitud->saldo_despues,
+            ];
+        }
+
+        $saldoActual = $solicitud->esAprobada()
+            ? $solicitud->empleado->saldo_vacaciones + $solicitud->dias_solicitados
+            : $solicitud->empleado->saldo_vacaciones;
+
+        return [
+            'actual' => (float) $saldoActual,
+            'despues' => (float) ($saldoActual - $solicitud->dias_solicitados),
+        ];
+    }
+
     /**
      * Actualizar una solicitud existente
      * Si está aprobada, recalcula el saldo del empleado
@@ -523,6 +576,8 @@ class SolicitudService
             'fecha_fin' => $ultimaFecha,
             'tipo' => $tipoDetectado,
             'dias_solicitados' => $diasNuevos,
+            'saldo_actual' => $saldoParaValidar,
+            'saldo_despues' => $saldoParaValidar - $diasNuevos,
             'tiene_reemplazo' => $tieneReemplazo,
             'nombre_reemplazo' => $tieneReemplazo ? $nombreReemplazo : null,
         ];
