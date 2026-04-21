@@ -156,7 +156,7 @@ class FeriadoController extends Controller
             'nombre' => 'required|string|max:200',
             'fecha' => 'required|date',
             'tipo' => 'required|in:nacional,departamental',
-            'sede_id' => 'nullable|required_if:tipo,departamental|exists:sedes,id_sede',
+            'sede_id' => 'nullable|required_if:tipo,departamental|exists:core.sedes,id_sede',
             'activo' => 'boolean',
             'es_recurrente' => 'boolean',
             'procesar_devoluciones' => 'boolean', // Si debe procesar devoluciones automáticamente
@@ -231,7 +231,7 @@ class FeriadoController extends Controller
             'nombre' => 'required|string|max:200',
             'fecha' => 'required|date',
             'tipo' => 'required|in:nacional,departamental',
-            'sede_id' => 'nullable|required_if:tipo,departamental|exists:sedes,id_sede',
+            'sede_id' => 'nullable|required_if:tipo,departamental|exists:core.sedes,id_sede',
             'activo' => 'boolean',
             'es_recurrente' => 'boolean',
         ]);
