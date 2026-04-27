@@ -6,18 +6,17 @@ use App\Models\Empleado;
 use App\Models\Sede;
 use App\Models\SolicitudVacacion;
 use Maatwebsite\Excel\Concerns\FromCollection;
+use Maatwebsite\Excel\Concerns\ShouldAutoSize;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use Maatwebsite\Excel\Concerns\ShouldAutoSize;
-use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithTitle, ShouldAutoSize, WithEvents
 {
@@ -27,30 +26,41 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
     public function __construct(array $filtros = [])
     {
         $this->filtros = $filtros;
+
         if (isset($this->filtros['sede_id']) && $this->filtros['sede_id'] !== 'todos' && $this->filtros['sede_id'] !== '') {
             $this->sede = Sede::find($this->filtros['sede_id']);
         }
     }
 
-    /**
-     * Construimos la colección de filas.
-     * Mostramos un resumen consolidado por empleado.
-     */
     public function collection()
     {
-        $query = Empleado::query()->where('activo', true);
+        $year = (int) ($this->filtros['ano'] ?? date('Y'));
+
+        $query = Empleado::query()
+            ->where('activo', true)
+            ->withSum([
+                'solicitudes as dias_pendientes_aprobacion' => function ($q) use ($year) {
+                    $q->whereIn('estado', [
+                        SolicitudVacacion::ESTADO_PENDIENTE,
+                        SolicitudVacacion::ESTADO_PENDIENTE_DOCUMENTO,
+                    ])->whereYear('fecha_solicitud', $year);
+                }
+            ], 'dias_solicitados');
 
         if ($this->sede) {
             $query->where('sede_id', $this->sede->id);
         }
 
         $empleados = $query->orderBy('apellido_paterno')
-                           ->orderBy('apellido_materno')
-                           ->get();
+            ->orderBy('apellido_materno')
+            ->get();
 
         $rows = collect();
 
         foreach ($empleados as $empleado) {
+            $saldoActual = (float) $empleado->saldo_vacaciones;
+            $diasPendientes = (float) ($empleado->dias_pendientes_aprobacion ?? 0);
+
             $rows->push([
                 $empleado->ci,
                 $empleado->nombres,
@@ -60,7 +70,9 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
                 $empleado->fecha_ingreso ? $empleado->fecha_ingreso->format('d/m/Y') : '',
                 $empleado->anos_servicio,
                 $empleado->dias_correspondientes,
-                (float) $empleado->saldo_vacaciones
+                $saldoActual,
+                $diasPendientes,
+                $saldoActual - $diasPendientes,
             ]);
         }
 
@@ -75,16 +87,19 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
     public function headings(): array
     {
         $year = $this->filtros['ano'] ?? date('Y');
+
         return [
             'C.I.',
             'NOMBRE(S)',
-            '1º APELLIDO',
-            '2º APELLIDO',
+            '1er APELLIDO',
+            '2do APELLIDO',
             'CARGO',
             'FECHA DE INGRESO',
-            'AÑOS DE ANTIGÜEDAD',
-            'DÍAS CORRESPONDE GESTIÓN ' . $year,
-            'SALDO TOTAL (DÍAS)'
+            'ANOS DE ANTIGUEDAD',
+            'DIAS CORRESPONDE GESTION ' . $year,
+            'SALDO TOTAL (DIAS)',
+            'DIAS PENDIENTES POR APROBAR',
+            'SALDO PROYECTADO DESPUES DE PROGRAMAR',
         ];
     }
 
@@ -96,82 +111,89 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
     public function styles(Worksheet $sheet)
     {
         return [
-            1 => [ // Fila de cabecera (en la fila 3 realmente por el AfterSheet)
+            1 => [
                 'font' => ['bold' => true, 'size' => 10],
                 'alignment' => [
                     'horizontal' => Alignment::HORIZONTAL_CENTER,
                     'vertical' => Alignment::VERTICAL_CENTER,
-                    'wrapText' => true
+                    'wrapText' => true,
                 ],
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'EEEEEE']]
-            ]
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'EEEEEE']],
+            ],
         ];
     }
 
     public function registerEvents(): array
     {
         return [
-            AfterSheet::class => function(AfterSheet $event) {
+            AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                // 1. Insertamos 2 filas al inicio para el cabezal institucional
                 $sheet->insertNewRowBefore(1, 2);
 
-                // FILA 1: Nombre de la Sede
-                $sheet->mergeCells('A1:I1');
+                $sheet->mergeCells('A1:K1');
                 $nombreSede = strtoupper($this->sede ? $this->sede->nombre : 'TODAS LAS SEDES');
                 $sheet->setCellValue('A1', $nombreSede);
 
-                // FILA 2: Título del Reporte
-                $sheet->mergeCells('A2:I2');
+                $sheet->mergeCells('A2:K2');
                 $year = $this->filtros['ano'] ?? date('Y');
-                $titulo = "CONSOLIDADO GENERAL DE SALDOS DE VACACIONES - GESTIÓN " . $year;
+                $titulo = 'CONSOLIDADO GENERAL DE SALDOS DE VACACIONES - GESTION ' . $year;
                 $sheet->setCellValue('A2', $titulo);
 
-                // Estilo Sede (Fila 1)
-                $sheet->getStyle('A1:I1')->applyFromArray([
+                $sheet->getStyle('A1:K1')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1B5E20']]
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                    ],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1B5E20']],
                 ]);
                 $sheet->getRowDimension(1)->setRowHeight(35);
 
-                // Estilo Título (Fila 2)
-                $sheet->getStyle('A2:I2')->applyFromArray([
+                $sheet->getStyle('A2:K2')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '333333']],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'C8E6C9']]
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                    ],
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'C8E6C9']],
                 ]);
                 $sheet->getRowDimension(2)->setRowHeight(25);
 
-                // Estilo Cabeceras de Columnas (Ahora en Fila 3)
                 $sheet->getRowDimension(3)->setRowHeight(35);
-                $sheet->getStyle('A3:I3')->applyFromArray([
+                $sheet->getStyle('A3:K3')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 9],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER, 'wrapText' => true],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical' => Alignment::VERTICAL_CENTER,
+                        'wrapText' => true,
+                    ],
                     'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F2F2F2']]
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F2F2F2']],
                 ]);
 
-                // Estilos de datos (Fila 4 en adelante)
                 $lastRow = $sheet->getHighestRow();
                 if ($lastRow >= 4) {
-                    $sheet->getStyle('A4:I' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+                    $sheet->getStyle('A4:K' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
-                    // Alineación
-                    $sheet->getStyle('A4:A' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // CI
-                    $sheet->getStyle('F4:I' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER); // Fechas y Números
+                    $sheet->getStyle('A4:A' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getStyle('F4:K' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                    // Formato para el saldo (columna I)
-                    $sheet->getStyle('I4:I' . $lastRow)->getNumberFormat()->setFormatCode('0.0');
+                    $sheet->getStyle('I4:K' . $lastRow)->getNumberFormat()->setFormatCode('0.0');
 
-                    // Resaltar saldos negativos en rojo
                     for ($i = 4; $i <= $lastRow; $i++) {
-                        $val = $sheet->getCell('I' . $i)->getValue();
-                        if ($val < 0) {
+                        $saldoActual = $sheet->getCell('I' . $i)->getValue();
+                        $saldoProyectado = $sheet->getCell('K' . $i)->getValue();
+
+                        if ($saldoActual < 0) {
                             $sheet->getStyle('I' . $i)->getFont()->getColor()->setRGB('C62828');
                             $sheet->getStyle('I' . $i)->getFont()->setBold(true);
+                        }
+
+                        if ($saldoProyectado < 0) {
+                            $sheet->getStyle('K' . $i)->getFont()->getColor()->setRGB('C62828');
+                            $sheet->getStyle('K' . $i)->getFont()->setBold(true);
                         }
                     }
                 }
@@ -181,4 +203,3 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
         ];
     }
 }
-
