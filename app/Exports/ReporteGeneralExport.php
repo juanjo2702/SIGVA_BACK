@@ -10,6 +10,7 @@ use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\WithStrictNullComparison;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
@@ -18,7 +19,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithTitle, ShouldAutoSize, WithEvents
+class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping, WithStyles, WithTitle, ShouldAutoSize, WithEvents, WithStrictNullComparison
 {
     protected array $filtros;
     protected ?Sede $sede = null;
@@ -38,6 +39,14 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
 
         $query = Empleado::query()
             ->where('activo', true)
+            ->with([
+                'solicitudes' => function ($q) use ($year) {
+                    $q->whereIn('estado', [
+                        SolicitudVacacion::ESTADO_PENDIENTE,
+                        SolicitudVacacion::ESTADO_PENDIENTE_DOCUMENTO,
+                    ])->whereYear('fecha_solicitud', $year);
+                }
+            ])
             ->withSum([
                 'solicitudes as dias_pendientes_aprobacion' => function ($q) use ($year) {
                     $q->whereIn('estado', [
@@ -60,6 +69,12 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
         foreach ($empleados as $empleado) {
             $saldoActual = (float) $empleado->saldo_vacaciones;
             $diasPendientes = (float) ($empleado->dias_pendientes_aprobacion ?? 0);
+            $reemplazantes = $empleado->solicitudes
+                ->filter(fn ($solicitud) => !empty($solicitud->nombre_reemplazo))
+                ->pluck('nombre_reemplazo')
+                ->unique()
+                ->values()
+                ->implode(', ');
 
             $rows->push([
                 $empleado->ci,
@@ -73,6 +88,7 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
                 $saldoActual,
                 $diasPendientes,
                 $saldoActual - $diasPendientes,
+                $reemplazantes,
             ]);
         }
 
@@ -100,6 +116,7 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
             'SALDO TOTAL (DIAS)',
             'DIAS PENDIENTES POR APROBAR',
             'SALDO PROYECTADO DESPUES DE PROGRAMAR',
+            'REEMPLAZANTE PENDIENTE',
         ];
     }
 
@@ -132,16 +149,16 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
 
                 $sheet->insertNewRowBefore(1, 2);
 
-                $sheet->mergeCells('A1:K1');
+                $sheet->mergeCells('A1:L1');
                 $nombreSede = strtoupper($this->sede ? $this->sede->nombre : 'TODAS LAS SEDES');
                 $sheet->setCellValue('A1', $nombreSede);
 
-                $sheet->mergeCells('A2:K2');
+                $sheet->mergeCells('A2:L2');
                 $year = $this->filtros['ano'] ?? date('Y');
                 $titulo = 'CONSOLIDADO GENERAL DE SALDOS DE VACACIONES - GESTION ' . $year;
                 $sheet->setCellValue('A2', $titulo);
 
-                $sheet->getStyle('A1:K1')->applyFromArray([
+                $sheet->getStyle('A1:L1')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']],
                     'alignment' => [
                         'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -151,7 +168,7 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
                 ]);
                 $sheet->getRowDimension(1)->setRowHeight(35);
 
-                $sheet->getStyle('A2:K2')->applyFromArray([
+                $sheet->getStyle('A2:L2')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '333333']],
                     'alignment' => [
                         'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -162,7 +179,7 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
                 $sheet->getRowDimension(2)->setRowHeight(25);
 
                 $sheet->getRowDimension(3)->setRowHeight(35);
-                $sheet->getStyle('A3:K3')->applyFromArray([
+                $sheet->getStyle('A3:L3')->applyFromArray([
                     'font' => ['bold' => true, 'size' => 9],
                     'alignment' => [
                         'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -175,7 +192,7 @@ class ReporteGeneralExport implements FromCollection, WithHeadings, WithMapping,
 
                 $lastRow = $sheet->getHighestRow();
                 if ($lastRow >= 4) {
-                    $sheet->getStyle('A4:K' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
+                    $sheet->getStyle('A4:L' . $lastRow)->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
                     $sheet->getStyle('A4:A' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getStyle('F4:K' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
