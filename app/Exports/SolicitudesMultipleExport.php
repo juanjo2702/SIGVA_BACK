@@ -22,9 +22,14 @@ class SolicitudesMultipleExport implements WithMultipleSheets
     {
         $sheets = [];
 
-        $sedesIds = Empleado::where('activo', true)->pluck('sede_id')->unique();
+        $sedesIds = Empleado::where('activo', true)
+            ->pluck('sede_id')
+            ->filter()
+            ->unique()
+            ->values();
+
         $sedes = Sede::query()
-            ->whereIn('id', $sedesIds)
+            ->whereIn('id_sede', $sedesIds)
             ->orderBy('nombre')
             ->get();
 
