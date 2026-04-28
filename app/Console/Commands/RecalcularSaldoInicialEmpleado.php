@@ -19,6 +19,7 @@ class RecalcularSaldoInicialEmpleado extends Command
         {saldo=9 : Saldo inicial historico desde el primer movimiento}
         {--fecha-ingreso= : Fecha de ingreso esperada, en Y-m-d o d/m/Y}
         {--detalle-parcial=* : Corrige un detalle a medio dia: SOLICITUD_ID:FECHA:parcial_manana|parcial_tarde}
+        {--ignorar-historial=* : ID de historial a neutralizar durante el recalculo}
         {--apply : Aplica los cambios. Sin esta opcion solo simula}
         {--no-backup : No generar respaldo JSON antes de aplicar}';
 
@@ -53,6 +54,16 @@ class RecalcularSaldoInicialEmpleado extends Command
             ->orderBy('id')
             ->get();
 
+        $historialIgnoradoIds = $this->resolverHistorialIgnorado($historial);
+
+        if ($historialIgnoradoIds === null) {
+            return Command::FAILURE;
+        }
+
+        if (!$this->validarHistorialAprobacionesDuplicadas($historial, $historialIgnoradoIds)) {
+            return Command::FAILURE;
+        }
+
         if ($historial->isEmpty()) {
             $this->warn('El empleado no tiene historial. Solo se ajustaria el saldo actual.');
             $this->mostrarEmpleado($empleado, $saldoInicial);
@@ -74,11 +85,12 @@ class RecalcularSaldoInicialEmpleado extends Command
         $solicitudesConDiasCorregidos = $correccionesDetalle
             ->pluck('solicitud_dias_nuevo', 'solicitud_id')
             ->all();
-        $recalculo = $this->recalcularHistorial($historial, $saldoInicial, $solicitudesConDiasCorregidos);
+        $recalculo = $this->recalcularHistorial($historial, $saldoInicial, $solicitudesConDiasCorregidos, $historialIgnoradoIds);
         $saldoFinal = $recalculo['saldo_final'];
         $actualizacionesSolicitudes = $this->resolverActualizacionesSolicitudes($empleado, $recalculo['filas']);
 
         $this->mostrarResumen($empleado, $primerSaldoAnterior, $saldoInicial, $delta, $saldoFinal, $apply);
+        $this->mostrarHistorialIgnorado($historialIgnoradoIds);
         $this->mostrarCorreccionesDetalle($correccionesDetalle);
         $this->mostrarHistorial($recalculo['filas']);
         $this->mostrarSolicitudes($actualizacionesSolicitudes);
@@ -86,7 +98,7 @@ class RecalcularSaldoInicialEmpleado extends Command
         if (!$apply) {
             $this->newLine();
             $this->warn('SIMULACION: no se guardo ningun cambio.');
-            $this->line('Para aplicar: ' . $this->comandoAplicar($ci, $saldoInicial, $empleado, $correccionesDetalle));
+            $this->line('Para aplicar: ' . $this->comandoAplicar($ci, $saldoInicial, $empleado, $correccionesDetalle, $historialIgnoradoIds));
             return Command::SUCCESS;
         }
 
@@ -229,6 +241,76 @@ class RecalcularSaldoInicialEmpleado extends Command
         return true;
     }
 
+    private function resolverHistorialIgnorado($historial): ?array
+    {
+        $ids = collect($this->option('ignorar-historial') ?? [])
+            ->filter(fn ($id) => $id !== null && $id !== '')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $idsExistentes = $historial->pluck('id')->map(fn ($id) => (int) $id);
+        $idsInvalidos = $ids->diff($idsExistentes);
+
+        if ($idsInvalidos->isNotEmpty()) {
+            $this->error('Los siguientes IDs de historial no pertenecen a este empleado: ' . $idsInvalidos->implode(', '));
+            return null;
+        }
+
+        return $ids->all();
+    }
+
+    private function validarHistorialAprobacionesDuplicadas($historial, array $historialIgnoradoIds): bool
+    {
+        $duplicados = $historial
+            ->filter(fn (HistorialVacacion $movimiento) => !in_array((int) $movimiento->id, $historialIgnoradoIds, true))
+            ->map(function (HistorialVacacion $movimiento) {
+                $solicitudId = $this->extraerSolicitudAprobadaId($movimiento);
+
+                if (!$solicitudId) {
+                    return null;
+                }
+
+                return [
+                    'solicitud_id' => $solicitudId,
+                    'historial_id' => $movimiento->id,
+                    'dias_cambio' => round((float) $movimiento->dias_cambio, 1),
+                    'dias_anteriores' => round((float) $movimiento->dias_anteriores, 1),
+                    'dias_nuevos' => round((float) $movimiento->dias_nuevos, 1),
+                    'created_at' => $movimiento->created_at?->format('Y-m-d H:i:s'),
+                ];
+            })
+            ->filter()
+            ->groupBy('solicitud_id')
+            ->filter(fn ($grupo) => $grupo->count() > 1);
+
+        if ($duplicados->isEmpty()) {
+            return true;
+        }
+
+        $this->error('Se detectaron aprobaciones duplicadas para la misma solicitud. No se puede recalcular sin resolverlas.');
+
+        foreach ($duplicados as $solicitudId => $grupo) {
+            $this->warn("Solicitud #{$solicitudId}: conserva un historial e ignora el otro con --ignorar-historial=ID");
+            $this->table(
+                ['Historial', 'Cambio', 'Antes', 'Despues', 'Fecha'],
+                $grupo->map(fn (array $fila) => [
+                    $fila['historial_id'],
+                    $fila['dias_cambio'],
+                    $fila['dias_anteriores'],
+                    $fila['dias_nuevos'],
+                    $fila['created_at'],
+                ])->all()
+            );
+        }
+
+        return false;
+    }
+
     private function parseFecha(string $valor): ?Carbon
     {
         foreach (['Y-m-d', 'd/m/Y', 'j/n/Y', 'd-m-Y', 'j-n-Y'] as $formato) {
@@ -250,7 +332,7 @@ class RecalcularSaldoInicialEmpleado extends Command
         }
     }
 
-    private function recalcularHistorial($historial, float $saldoInicial, array $solicitudesConDiasCorregidos = []): array
+    private function recalcularHistorial($historial, float $saldoInicial, array $solicitudesConDiasCorregidos = [], array $historialIgnoradoIds = []): array
     {
         $saldo = $saldoInicial;
         $filas = [];
@@ -258,13 +340,16 @@ class RecalcularSaldoInicialEmpleado extends Command
         foreach ($historial as $movimiento) {
             $cambioActual = round((float) $movimiento->dias_cambio, 1);
             $cambio = $cambioActual;
+            $ignorado = in_array((int) $movimiento->id, $historialIgnoradoIds, true);
 
-            if (
-                $movimiento->tipo_cambio === HistorialVacacion::TIPO_SOLICITUD_APROBADA
-                && preg_match('/Solicitud de vacaciones #(\d+) aprobada/', (string) $movimiento->descripcion, $matches)
-                && array_key_exists((int) $matches[1], $solicitudesConDiasCorregidos)
-            ) {
-                $cambio = round(-1 * (float) $solicitudesConDiasCorregidos[(int) $matches[1]], 1);
+            if ($ignorado) {
+                $cambio = 0.0;
+            } else {
+                $solicitudId = $this->extraerSolicitudAprobadaId($movimiento);
+
+                if ($solicitudId && array_key_exists($solicitudId, $solicitudesConDiasCorregidos)) {
+                    $cambio = round(-1 * (float) $solicitudesConDiasCorregidos[$solicitudId], 1);
+                }
             }
 
             $nuevoAnterior = round($saldo, 1);
@@ -274,6 +359,7 @@ class RecalcularSaldoInicialEmpleado extends Command
                 'id' => $movimiento->id,
                 'tipo_cambio' => $movimiento->tipo_cambio,
                 'descripcion' => $movimiento->descripcion,
+                'ignorado' => $ignorado,
                 'actual_dias_cambio' => $cambioActual,
                 'nuevo_dias_cambio' => $cambio,
                 'actual_dias_anteriores' => round((float) $movimiento->dias_anteriores, 1),
@@ -292,11 +378,28 @@ class RecalcularSaldoInicialEmpleado extends Command
         ];
     }
 
+    private function extraerSolicitudAprobadaId(HistorialVacacion $movimiento): ?int
+    {
+        if ($movimiento->tipo_cambio !== HistorialVacacion::TIPO_SOLICITUD_APROBADA) {
+            return null;
+        }
+
+        if (!preg_match('/Solicitud de vacaciones #(\d+) aprobada/', (string) $movimiento->descripcion, $matches)) {
+            return null;
+        }
+
+        return (int) $matches[1];
+    }
+
     private function resolverActualizacionesSolicitudes(Empleado $empleado, array $filas)
     {
         return collect($filas)
             ->filter(fn (array $fila) => $fila['tipo_cambio'] === HistorialVacacion::TIPO_SOLICITUD_APROBADA)
             ->map(function (array $fila) use ($empleado) {
+                if ($fila['ignorado']) {
+                    return null;
+                }
+
                 if (!preg_match('/Solicitud de vacaciones #(\d+) aprobada/', (string) $fila['descripcion'], $matches)) {
                     return null;
                 }
@@ -346,10 +449,11 @@ class RecalcularSaldoInicialEmpleado extends Command
     private function mostrarHistorial(array $filas): void
     {
         $this->table(
-            ['ID', 'Tipo', 'Cambio', 'Cambio recalc.', 'Antes', 'Despues', 'Antes recalc.', 'Despues recalc.', 'Descripcion'],
+            ['ID', 'Tipo', 'Ignorado', 'Cambio', 'Cambio recalc.', 'Antes', 'Despues', 'Antes recalc.', 'Despues recalc.', 'Descripcion'],
             collect($filas)->map(fn (array $fila) => [
                 $fila['id'],
                 $fila['tipo_cambio'],
+                $fila['ignorado'] ? 'si' : 'no',
                 $fila['actual_dias_cambio'],
                 $fila['nuevo_dias_cambio'],
                 $fila['actual_dias_anteriores'],
@@ -359,6 +463,16 @@ class RecalcularSaldoInicialEmpleado extends Command
                 Str::limit((string) $fila['descripcion'], 42),
             ])->all()
         );
+    }
+
+    private function mostrarHistorialIgnorado(array $historialIgnoradoIds): void
+    {
+        if (empty($historialIgnoradoIds)) {
+            return;
+        }
+
+        $this->line('Historial neutralizado en este recalculo: ' . implode(', ', $historialIgnoradoIds));
+        $this->newLine();
     }
 
     private function mostrarCorreccionesDetalle($correcciones): void
@@ -407,10 +521,13 @@ class RecalcularSaldoInicialEmpleado extends Command
         );
     }
 
-    private function comandoAplicar(string $ci, float $saldoInicial, Empleado $empleado, $correccionesDetalle): string
+    private function comandoAplicar(string $ci, float $saldoInicial, Empleado $empleado, $correccionesDetalle, array $historialIgnoradoIds): string
     {
         $opcionesDetalle = $correccionesDetalle
             ->map(fn (array $fila) => "--detalle-parcial={$fila['solicitud_id']}:{$fila['fecha']}:{$fila['tipo_nuevo']}")
+            ->implode(' ');
+        $opcionesHistorial = collect($historialIgnoradoIds)
+            ->map(fn (int $id) => "--ignorar-historial={$id}")
             ->implode(' ');
 
         $partes = [
@@ -422,6 +539,10 @@ class RecalcularSaldoInicialEmpleado extends Command
 
         if ($opcionesDetalle !== '') {
             $partes[] = $opcionesDetalle;
+        }
+
+        if ($opcionesHistorial !== '') {
+            $partes[] = $opcionesHistorial;
         }
 
         $partes[] = '--apply';
