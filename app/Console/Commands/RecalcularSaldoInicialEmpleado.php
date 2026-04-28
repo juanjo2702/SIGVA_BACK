@@ -20,6 +20,7 @@ class RecalcularSaldoInicialEmpleado extends Command
         {--fecha-ingreso= : Fecha de ingreso esperada, en Y-m-d o d/m/Y}
         {--detalle-parcial=* : Corrige un detalle a medio dia: SOLICITUD_ID:FECHA:parcial_manana|parcial_tarde}
         {--ignorar-historial=* : ID de historial a neutralizar durante el recalculo}
+        {--historial-cambio=* : Fuerza el cambio de un movimiento historico: HISTORIAL_ID:CAMBIO}
         {--apply : Aplica los cambios. Sin esta opcion solo simula}
         {--no-backup : No generar respaldo JSON antes de aplicar}';
 
@@ -64,6 +65,12 @@ class RecalcularSaldoInicialEmpleado extends Command
             return Command::FAILURE;
         }
 
+        $historialCambiosForzados = $this->resolverHistorialCambiosForzados($historial, $historialIgnoradoIds);
+
+        if ($historialCambiosForzados === null) {
+            return Command::FAILURE;
+        }
+
         if ($historial->isEmpty()) {
             $this->warn('El empleado no tiene historial. Solo se ajustaria el saldo actual.');
             $this->mostrarEmpleado($empleado, $saldoInicial);
@@ -85,12 +92,19 @@ class RecalcularSaldoInicialEmpleado extends Command
         $solicitudesConDiasCorregidos = $correccionesDetalle
             ->pluck('solicitud_dias_nuevo', 'solicitud_id')
             ->all();
-        $recalculo = $this->recalcularHistorial($historial, $saldoInicial, $solicitudesConDiasCorregidos, $historialIgnoradoIds);
+        $recalculo = $this->recalcularHistorial(
+            $historial,
+            $saldoInicial,
+            $solicitudesConDiasCorregidos,
+            $historialIgnoradoIds,
+            $historialCambiosForzados
+        );
         $saldoFinal = $recalculo['saldo_final'];
         $actualizacionesSolicitudes = $this->resolverActualizacionesSolicitudes($empleado, $recalculo['filas']);
 
         $this->mostrarResumen($empleado, $primerSaldoAnterior, $saldoInicial, $delta, $saldoFinal, $apply);
         $this->mostrarHistorialIgnorado($historialIgnoradoIds);
+        $this->mostrarHistorialCambiosForzados($historialCambiosForzados);
         $this->mostrarCorreccionesDetalle($correccionesDetalle);
         $this->mostrarHistorial($recalculo['filas']);
         $this->mostrarSolicitudes($actualizacionesSolicitudes);
@@ -98,7 +112,14 @@ class RecalcularSaldoInicialEmpleado extends Command
         if (!$apply) {
             $this->newLine();
             $this->warn('SIMULACION: no se guardo ningun cambio.');
-            $this->line('Para aplicar: ' . $this->comandoAplicar($ci, $saldoInicial, $empleado, $correccionesDetalle, $historialIgnoradoIds));
+            $this->line('Para aplicar: ' . $this->comandoAplicar(
+                $ci,
+                $saldoInicial,
+                $empleado,
+                $correccionesDetalle,
+                $historialIgnoradoIds,
+                $historialCambiosForzados
+            ));
             return Command::SUCCESS;
         }
 
@@ -311,6 +332,49 @@ class RecalcularSaldoInicialEmpleado extends Command
         return false;
     }
 
+    private function resolverHistorialCambiosForzados($historial, array $historialIgnoradoIds): ?array
+    {
+        $opciones = collect($this->option('historial-cambio') ?? [])->filter();
+
+        if ($opciones->isEmpty()) {
+            return [];
+        }
+
+        $idsExistentes = $historial->pluck('id')->map(fn ($id) => (int) $id);
+        $cambios = [];
+
+        foreach ($opciones as $opcion) {
+            $partes = explode(':', (string) $opcion);
+
+            if (count($partes) !== 2) {
+                $this->error("Formato invalido en --historial-cambio={$opcion}. Usa HISTORIAL_ID:CAMBIO.");
+                return null;
+            }
+
+            [$historialId, $cambio] = $partes;
+            $historialId = (int) $historialId;
+
+            if (!$idsExistentes->contains($historialId)) {
+                $this->error("El historial #{$historialId} no pertenece a este empleado o no existe.");
+                return null;
+            }
+
+            if (in_array($historialId, $historialIgnoradoIds, true)) {
+                $this->error("El historial #{$historialId} no puede estar en --ignorar-historial y --historial-cambio a la vez.");
+                return null;
+            }
+
+            if (!is_numeric($cambio)) {
+                $this->error("El cambio forzado para historial #{$historialId} no es numerico.");
+                return null;
+            }
+
+            $cambios[$historialId] = round((float) $cambio, 1);
+        }
+
+        return $cambios;
+    }
+
     private function parseFecha(string $valor): ?Carbon
     {
         foreach (['Y-m-d', 'd/m/Y', 'j/n/Y', 'd-m-Y', 'j-n-Y'] as $formato) {
@@ -332,7 +396,13 @@ class RecalcularSaldoInicialEmpleado extends Command
         }
     }
 
-    private function recalcularHistorial($historial, float $saldoInicial, array $solicitudesConDiasCorregidos = [], array $historialIgnoradoIds = []): array
+    private function recalcularHistorial(
+        $historial,
+        float $saldoInicial,
+        array $solicitudesConDiasCorregidos = [],
+        array $historialIgnoradoIds = [],
+        array $historialCambiosForzados = []
+    ): array
     {
         $saldo = $saldoInicial;
         $filas = [];
@@ -344,6 +414,8 @@ class RecalcularSaldoInicialEmpleado extends Command
 
             if ($ignorado) {
                 $cambio = 0.0;
+            } elseif (array_key_exists((int) $movimiento->id, $historialCambiosForzados)) {
+                $cambio = $historialCambiosForzados[(int) $movimiento->id];
             } else {
                 $solicitudId = $this->extraerSolicitudAprobadaId($movimiento);
 
@@ -475,6 +547,19 @@ class RecalcularSaldoInicialEmpleado extends Command
         $this->newLine();
     }
 
+    private function mostrarHistorialCambiosForzados(array $historialCambiosForzados): void
+    {
+        if (empty($historialCambiosForzados)) {
+            return;
+        }
+
+        $this->line('Cambios historicos forzados en este recalculo:');
+        $this->table(
+            ['Historial', 'Cambio recalc.'],
+            collect($historialCambiosForzados)->map(fn (float $cambio, int $id) => [$id, $cambio])->values()->all()
+        );
+    }
+
     private function mostrarCorreccionesDetalle($correcciones): void
     {
         if ($correcciones->isEmpty()) {
@@ -521,13 +606,23 @@ class RecalcularSaldoInicialEmpleado extends Command
         );
     }
 
-    private function comandoAplicar(string $ci, float $saldoInicial, Empleado $empleado, $correccionesDetalle, array $historialIgnoradoIds): string
+    private function comandoAplicar(
+        string $ci,
+        float $saldoInicial,
+        Empleado $empleado,
+        $correccionesDetalle,
+        array $historialIgnoradoIds,
+        array $historialCambiosForzados
+    ): string
     {
         $opcionesDetalle = $correccionesDetalle
             ->map(fn (array $fila) => "--detalle-parcial={$fila['solicitud_id']}:{$fila['fecha']}:{$fila['tipo_nuevo']}")
             ->implode(' ');
         $opcionesHistorial = collect($historialIgnoradoIds)
             ->map(fn (int $id) => "--ignorar-historial={$id}")
+            ->implode(' ');
+        $opcionesCambios = collect($historialCambiosForzados)
+            ->map(fn (float $cambio, int $id) => "--historial-cambio={$id}:{$cambio}")
             ->implode(' ');
 
         $partes = [
@@ -543,6 +638,10 @@ class RecalcularSaldoInicialEmpleado extends Command
 
         if ($opcionesHistorial !== '') {
             $partes[] = $opcionesHistorial;
+        }
+
+        if ($opcionesCambios !== '') {
+            $partes[] = $opcionesCambios;
         }
 
         $partes[] = '--apply';
