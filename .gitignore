@@ -22,3 +22,10 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+dist/
+build/
+*.tar
+*.tar.gz
+*.zip
+.env.*.local
+
