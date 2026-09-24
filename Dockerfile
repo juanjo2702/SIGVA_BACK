@@ -27,10 +27,13 @@ RUN install-php-extensions \
     gd \
     zip \
     opcache \
-    intl
+    intl \
+    iconv
 
 # Copiar Composer
 COPY --from=composer:2.8 /usr/bin/composer /usr/bin/composer
+
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
 WORKDIR /var/www/html
 
@@ -38,13 +41,14 @@ WORKDIR /var/www/html
 COPY composer.json composer.lock* ./
 
 # Instalar dependencias PHP de producción sin ejecutar scripts aún
-RUN composer install --no-dev --no-interaction --no-scripts --prefer-dist --optimize-autoloader
+RUN composer install --no-dev --no-interaction --no-scripts --prefer-dist --no-autoloader --ignore-platform-reqs
 
 # Copiar el código fuente completo de la aplicación
 COPY . .
 
-# Regenerar autoloader optimizado
-RUN composer dump-autoload --optimize --no-dev
+# Limpiar caches residuales y regenerar autoloader optimizado sin scripts de artisan
+RUN rm -f bootstrap/cache/*.php \
+    && composer dump-autoload --optimize --no-dev --no-scripts
 
 # Configurar Nginx, Supervisor y Entrypoint
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf

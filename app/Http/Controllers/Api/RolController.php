@@ -9,33 +9,25 @@ use Illuminate\Http\Request;
 class RolController extends Controller
 {
     /**
-     * Listar roles con paginación
+     * Listar roles de SIGVA (sistema_id = 3)
      */
     public function index(Request $request)
     {
-        $query = Rol::withCount('usuarios');
+        $query = Rol::where('sistema_id', 3)->withCount('usuarios');
 
         // Búsqueda
         if ($request->filled('buscar')) {
             $buscar = $request->buscar;
-            $query->where(function ($q) use ($buscar) {
-                $q->where('nombre', 'like', "%{$buscar}%")
-                    ->orWhere('descripcion', 'like', "%{$buscar}%");
-            });
-        }
-
-        // Filtro por estado
-        if ($request->filled('activo')) {
-            $query->where('activo', $request->activo === 'true' || $request->activo === '1');
+            $query->where('nombres', 'like', "%{$buscar}%");
         }
 
         // Sin paginación para select
         if ($request->get('sin_paginar') === 'true') {
-            return response()->json(Rol::where('activo', true)->get());
+            return response()->json(Rol::where('sistema_id', 3)->get());
         }
 
         $porPagina = $request->get('por_pagina', 15);
-        $roles = $query->orderBy('nombre')->paginate($porPagina);
+        $roles = $query->orderBy('nombres')->paginate($porPagina);
 
         return response()->json($roles);
     }
@@ -46,15 +38,15 @@ class RolController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'nombre' => 'required|string|max:100|unique:roles,nombre',
-            'descripcion' => 'nullable|string|max:255',
+            'nombre' => 'required|string|max:100',
         ], [
             'nombre.required' => 'El nombre del rol es obligatorio',
-            'nombre.unique' => 'Este nombre de rol ya existe',
         ]);
 
-        $validated['activo'] = true;
-        $rol = Rol::create($validated);
+        $rol = Rol::create([
+            'nombres' => $validated['nombre'],
+            'sistema_id' => 3,
+        ]);
 
         return response()->json([
             'message' => 'Rol creado exitosamente',
@@ -67,7 +59,7 @@ class RolController extends Controller
      */
     public function show($id)
     {
-        $rol = Rol::withCount('usuarios')->findOrFail($id);
+        $rol = Rol::withCount('usuarios')->where('sistema_id', 3)->findOrFail($id);
         return response()->json($rol);
     }
 
@@ -76,18 +68,17 @@ class RolController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $rol = Rol::findOrFail($id);
+        $rol = Rol::where('sistema_id', 3)->findOrFail($id);
 
         $validated = $request->validate([
-            'nombre' => 'required|string|max:100|unique:roles,nombre,' . $id,
-            'descripcion' => 'nullable|string|max:255',
-            'activo' => 'boolean',
+            'nombre' => 'required|string|max:100',
         ], [
             'nombre.required' => 'El nombre del rol es obligatorio',
-            'nombre.unique' => 'Este nombre de rol ya existe',
         ]);
 
-        $rol->update($validated);
+        $rol->update([
+            'nombres' => $validated['nombre'],
+        ]);
 
         return response()->json([
             'message' => 'Rol actualizado exitosamente',
@@ -100,7 +91,7 @@ class RolController extends Controller
      */
     public function destroy($id)
     {
-        $rol = Rol::withCount('usuarios')->findOrFail($id);
+        $rol = Rol::withCount('usuarios')->where('sistema_id', 3)->findOrFail($id);
 
         if ($rol->usuarios_count > 0) {
             return response()->json([

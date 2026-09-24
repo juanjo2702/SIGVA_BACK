@@ -60,6 +60,9 @@ class User extends Authenticatable implements JWTSubject
      * @var list<string>
      */
     protected $fillable = [
+        'id_persona',
+        'id_sede_scope',
+        'username',
         'ci',
         'nombres',
         'apellido_paterno',
@@ -68,6 +71,7 @@ class User extends Authenticatable implements JWTSubject
         'password',
         'rol_id',
         'activo',
+        'debe_cambiar_password',
         'must_change_password',
         'sede_id',
     ];
@@ -87,7 +91,69 @@ class User extends Authenticatable implements JWTSubject
      *
      * @var array
      */
-    protected $appends = ['nombre_completo', 'permisos', 'systems'];
+    protected $appends = ['nombre_completo', 'permisos', 'systems', 'ci', 'name', 'nombres', 'apellido_paterno', 'apellido_materno', 'email', 'rol', 'sede_id', 'password_segura', 'password_actual'];
+
+    public function getCiAttribute()
+    {
+        return $this->attributes['ci'] ?? $this->persona?->ci ?? $this->username;
+    }
+
+    public function getNombresAttribute()
+    {
+        return $this->attributes['nombres'] ?? $this->persona?->nombres ?? $this->username;
+    }
+
+    public function getNameAttribute()
+    {
+        return $this->attributes['name'] ?? $this->nombres;
+    }
+
+    public function getApellidoPaternoAttribute()
+    {
+        return $this->attributes['apellido_paterno'] ?? $this->persona?->apellido_paterno ?? $this->persona?->primer_apellido ?? '';
+    }
+
+    public function getApellidoMaternoAttribute()
+    {
+        return $this->attributes['apellido_materno'] ?? $this->persona?->segundo_apellido ?? $this->persona?->apellido_materno ?? '';
+    }
+
+    public function getEmailAttribute()
+    {
+        return $this->attributes['email'] ?? $this->persona?->correo_personal ?? null;
+    }
+
+    public function getSedeIdAttribute()
+    {
+        return $this->attributes['id_sede_scope'] ?? null;
+    }
+
+    public function setSedeIdAttribute($value)
+    {
+        $this->attributes['id_sede_scope'] = $value;
+    }
+
+    public function getMustChangePasswordAttribute()
+    {
+        return (bool) ($this->attributes['debe_cambiar_password'] ?? false);
+    }
+
+    public function setMustChangePasswordAttribute($value)
+    {
+        $this->attributes['debe_cambiar_password'] = (bool) $value;
+    }
+
+    public function getPasswordSeguraAttribute(): bool
+    {
+        return !($this->attributes['debe_cambiar_password'] ?? false);
+    }
+
+    public function getPasswordActualAttribute(): string
+    {
+        return ($this->attributes['debe_cambiar_password'] ?? false)
+            ? ($this->persona?->ci ?: $this->username)
+            : '🔒 Personalizada';
+    }
 
     /**
      * Get merged permissions (from role + individual)
@@ -113,6 +179,7 @@ class User extends Authenticatable implements JWTSubject
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'activo' => 'boolean',
+            'debe_cambiar_password' => 'boolean',
             'must_change_password' => 'boolean',
         ];
     }
@@ -126,12 +193,44 @@ class User extends Authenticatable implements JWTSubject
     }
 
     /**
-     * Get single role for backward compatibility (returns first role)
+     * Eager loadable rol relation alias for backward compatibility
+     */
+    public function rol()
+    {
+        return $this->belongsToMany(Rol::class, 'user_has_roles', 'user_id', 'role_id');
+    }
+
+    /**
+     * Get single role for backward compatibility (filtered by system 3)
      */
     public function getRolAttribute()
     {
         try {
-            return $this->roles->first();
+            $sigvaRole = $this->roles->firstWhere('sistema_id', 3);
+            if ($sigvaRole) {
+                return [
+                    'id' => $sigvaRole->id_rol ?? $sigvaRole->id,
+                    'id_rol' => $sigvaRole->id_rol ?? $sigvaRole->id,
+                    'nombre' => $sigvaRole->nombre ?? $sigvaRole->name ?? $sigvaRole->nombres,
+                    'name' => $sigvaRole->nombre ?? $sigvaRole->name ?? $sigvaRole->nombres,
+                ];
+            }
+
+            // Fallback ONLY if user is a Global Super Admin from SIGETH (sistema_id: 1)
+            $globalAdmin = $this->roles->first(function ($r) {
+                return (int)($r->sistema_id ?? 0) === 1 && in_array(strtoupper(trim($r->nombres ?? '')), ['ADMINISTRADOR', 'ADMIN', 'SUPER ADMIN', 'SUPERADMIN', 'DIRECTOR (ENCARGADO)']);
+            });
+
+            if ($globalAdmin) {
+                return [
+                    'id' => $globalAdmin->id_rol ?? $globalAdmin->id,
+                    'id_rol' => $globalAdmin->id_rol ?? $globalAdmin->id,
+                    'nombre' => 'Administrador',
+                    'name' => 'Administrador',
+                ];
+            }
+
+            return null;
         } catch (\Throwable) {
             return null;
         }
@@ -142,7 +241,7 @@ class User extends Authenticatable implements JWTSubject
      */
     public function sede()
     {
-        return $this->belongsTo(Sede::class, 'sede_id');
+        return $this->belongsTo(Sede::class, 'id_sede_scope', 'id_sede');
     }
 
     /**
@@ -151,6 +250,19 @@ class User extends Authenticatable implements JWTSubject
     public function persona()
     {
         return $this->belongsTo(Persona::class, 'id_persona', 'id');
+    }
+
+    /**
+     * Permisos individuales asignados directamente al usuario
+     */
+    public function individualPermissions()
+    {
+        return $this->belongsToMany(Permission::class, 'user_has_permissions', 'user_id', 'permission_id');
+    }
+
+    public function permissions()
+    {
+        return $this->belongsToMany(Permission::class, 'user_has_permissions', 'user_id', 'permission_id');
     }
 
     /**
@@ -193,16 +305,35 @@ class User extends Authenticatable implements JWTSubject
      */
     public function tieneRol(string $nombreRol): bool
     {
-        return $this->rol && strtolower($this->rol->nombre) === strtolower($nombreRol);
+        $rolName = is_array($this->rol) ? ($this->rol['nombre'] ?? '') : ($this->rol?->nombre ?? '');
+        return strtolower($rolName) === strtolower($nombreRol);
     }
 
     /**
      * Verificar si es admin
      */
-
     public function esAdmin(): bool
     {
-        return $this->tieneRol('admin') || $this->tieneRol('administrador');
+        foreach ($this->roles as $role) {
+            $rName = strtoupper(trim($role->nombres ?? $role->nombre ?? ''));
+            $sysId = (int)($role->sistema_id ?? 0);
+            if ($sysId === 3 && in_array($rName, ['ADMINISTRADOR', 'ADMIN'])) {
+                return true;
+            }
+            if ($sysId === 1 && in_array($rName, ['ADMINISTRADOR', 'ADMIN', 'SUPER ADMIN', 'SUPERADMIN', 'DIRECTOR (ENCARGADO)'])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public function hasSystemAccess(int $systemId = 3): bool
+    {
+        if ($this->esAdmin()) {
+            return true;
+        }
+        return $this->roles->contains(fn($r) => (int)($r->sistema_id ?? 0) === $systemId)
+            || $this->permissions->contains(fn($p) => (int)($p->sistema_id ?? 0) === $systemId);
     }
 
     /**
