@@ -65,11 +65,11 @@ return [
 
         'core' => [
             'driver' => 'mysql',
-            'host' => env('DB_CORE_HOST', '127.0.0.1'),
-            'port' => env('DB_CORE_PORT', '3306'),
-            'database' => env('DB_CORE_DATABASE', 'rrhh_core'),
-            'username' => env('DB_CORE_USERNAME', 'root'),
-            'password' => env('DB_CORE_PASSWORD', ''),
+            'host' => env('DB_CORE_HOST', env('DB_HOST', '127.0.0.1')),
+            'port' => env('DB_CORE_PORT', env('DB_PORT', '3306')),
+            'database' => env('DB_CORE_DATABASE', 'sigeth_db'),
+            'username' => env('DB_CORE_USERNAME', env('DB_USERNAME', 'root')),
+            'password' => env('DB_CORE_PASSWORD', env('DB_PASSWORD', '')),
             'charset' => 'utf8mb4',
             'collation' => 'utf8mb4_unicode_ci',
             'prefix' => '',

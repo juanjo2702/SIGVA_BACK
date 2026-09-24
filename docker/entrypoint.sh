@@ -17,5 +17,8 @@ if [ ! -L /var/www/html/public/storage ]; then
     php artisan storage:link --force || true
 fi
 
+# Descubrir paquetes instalados en producción
+php artisan package:discover --ansi || true
+
 # Ejecutar comando principal (supervisord)
 exec "$@"

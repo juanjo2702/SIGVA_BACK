@@ -13,11 +13,17 @@ return [
     |
     */
 
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['*'],
 
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
+        'https://sigva.unitepc.pro',
+        'https://api.sigva.unitepc.pro',
+        'https://sigeth.unitepc.pro',
+        'https://api.sigeth.unitepc.pro',
+        'https://postulaciones.unitepc.pro',
+        'https://api.sispo.unitepc.pro',
         'https://sigva.xpertiaplus.com',
         'https://sigeth.xpertiaplus.com',
         'http://localhost:9000',

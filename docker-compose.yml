@@ -6,19 +6,33 @@ services:
     container_name: sigva-backend
     restart: unless-stopped
     ports:
-      - "8002:8002"
+      - "${PORT:-8002}:8002"
     environment:
       - APP_NAME=SIGVA
-      - APP_ENV=${APP_ENV:-local}
-      - APP_DEBUG=${APP_DEBUG:-true}
-      - APP_URL=${APP_URL:-http://localhost:8002}
+      - APP_ENV=${APP_ENV:-production}
+      - APP_KEY=${APP_KEY:-base64:9zNxkkWh8PuqdKM2toWTcSRNl3wPxKAmjk/A5w1BCxE=}
+      - APP_DEBUG=${APP_DEBUG:-false}
+      - APP_URL=${APP_URL:-https://api.sigva.unitepc.pro}
       - DB_CONNECTION=mysql
-      - DB_HOST=${DB_HOST:-host.docker.internal}
+      - DB_HOST=${DB_HOST:-th-mysql}
       - DB_PORT=${DB_PORT:-3306}
       - DB_DATABASE=${DB_DATABASE:-sigva_db}
       - DB_USERNAME=${DB_USERNAME:-root}
-      - DB_PASSWORD=${DB_PASSWORD:-admin123}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - DB_PASSWORD=${DB_PASSWORD:-root_th_seguro2026}
+      - DB_CORE_HOST=${DB_CORE_HOST:-th-mysql}
+      - DB_CORE_PORT=${DB_CORE_PORT:-3306}
+      - DB_CORE_DATABASE=${DB_CORE_DATABASE:-sigeth_db}
+      - DB_CORE_USERNAME=${DB_CORE_USERNAME:-root}
+      - DB_CORE_PASSWORD=${DB_CORE_PASSWORD:-root_th_seguro2026}
+      - SANCTUM_STATEFUL_DOMAINS=sigva.unitepc.pro,api.sigva.unitepc.pro,sigeth.unitepc.pro
     volumes:
-      - ./storage:/var/www/html/storage
+      - sigva_storage:/var/www/html/storage
+    networks:
+      - th-ecosystem
+
+volumes:
+  sigva_storage:
+
+networks:
+  th-ecosystem:
+    external: true
