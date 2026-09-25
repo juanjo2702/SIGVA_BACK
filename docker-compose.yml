@@ -27,6 +27,7 @@ services:
       - SANCTUM_STATEFUL_DOMAINS=sigva.unitepc.pro,api.sigva.unitepc.pro,sigeth.unitepc.pro
     volumes:
       - sigva_storage:/var/www/html/storage
+      - /var/www:/host_www:ro
     networks:
       - th-ecosystem
 
